@@ -14,6 +14,11 @@ export interface ChallengeFrameSnapshot {
   elapsedLabel: string
   trackingLabel: string
   bodyHeight: number
+  counterPhaseLabel: string
+  elbowAngleLabel: string
+  postureLabel: string
+  readyLabel: string
+  eligibleFramesLabel: string
 }
 
 export interface RecordingFormat {
@@ -30,6 +35,11 @@ interface BuildChallengeFrameSnapshotOptions {
   elapsedSeconds: number
   trackingScore: number
   bodyHeight: number
+  counterPhase: 'ready' | 'down' | 'up'
+  averageElbowAngle: number | null
+  postureConfidence: number | null
+  isPushupReady: boolean
+  eligibleFrames: number
 }
 
 interface DrawPoseOverlayOptions {
@@ -62,6 +72,17 @@ export function buildChallengeFrameSnapshot(
     elapsedLabel: formatDuration(options.elapsedSeconds),
     trackingLabel: `${options.trackingScore}%`,
     bodyHeight: clamp(options.bodyHeight, 0, 1),
+    counterPhaseLabel: options.counterPhase.toUpperCase(),
+    elbowAngleLabel:
+      options.averageElbowAngle === null
+        ? 'n/a'
+        : `${Math.round(options.averageElbowAngle)}°`,
+    postureLabel:
+      options.postureConfidence === null
+        ? 'n/a'
+        : `${Math.round(options.postureConfidence * 100)}%`,
+    readyLabel: options.isPushupReady ? 'YES' : 'NO',
+    eligibleFramesLabel: options.eligibleFrames.toString(),
   }
 }
 
@@ -151,6 +172,7 @@ export function drawComposedChallengeFrame(
 
   drawFrontCameraBadge(context, canvas)
   drawTrackingBadge(context, canvas, snapshot.trackingLabel)
+  drawDebugPanel(context, canvas, snapshot)
   drawBottomStats(context, canvas, snapshot)
   drawSideElevator(context, canvas, snapshot.bodyHeight)
 
@@ -286,6 +308,59 @@ function drawTrackingBadge(
   context.textBaseline = 'middle'
   context.fillText(`Tracking ${trackingLabel}`, x + width / 2, y + height / 2)
   context.textAlign = 'left'
+}
+
+function drawDebugPanel(
+  context: CanvasRenderingContext2D,
+  canvas: HTMLCanvasElement,
+  snapshot: ChallengeFrameSnapshot
+) {
+  const width = canvas.width * 0.26
+  const rowHeight = canvas.height * 0.037
+  const headerHeight = canvas.height * 0.04
+  const x = canvas.width * 0.05
+  const y = canvas.height * 0.13
+  const height = headerHeight + rowHeight * 5 + canvas.height * 0.018
+
+  context.fillStyle = 'rgba(7, 16, 28, 0.72)'
+  roundRect(context, x, y, width, height, canvas.height * 0.018)
+  context.fill()
+
+  context.strokeStyle = 'rgba(240, 109, 79, 0.28)'
+  context.lineWidth = 2
+  roundRect(context, x, y, width, height, canvas.height * 0.018)
+  context.stroke()
+
+  context.fillStyle = '#f06d4f'
+  context.font = `600 ${Math.round(canvas.width * 0.018)}px Segoe UI`
+  context.textBaseline = 'top'
+  context.fillText('Counter debug', x + width * 0.08, y + canvas.height * 0.016)
+
+  const rows = [
+    ['Phase', snapshot.counterPhaseLabel],
+    ['Angle', snapshot.elbowAngleLabel],
+    ['Posture', snapshot.postureLabel],
+    ['Ready', snapshot.readyLabel],
+    ['Eligible', snapshot.eligibleFramesLabel],
+  ] as const
+
+  rows.forEach(([label, value], index) => {
+    const rowY = y + headerHeight + rowHeight * index + canvas.height * 0.01
+    context.fillStyle = 'rgba(255, 255, 255, 0.08)'
+    if (index > 0) {
+      context.fillRect(x + width * 0.07, rowY - canvas.height * 0.006, width * 0.86, 1)
+    }
+
+    context.fillStyle = '#8ad1c2'
+    context.font = `600 ${Math.round(canvas.width * 0.017)}px Segoe UI`
+    context.fillText(label.toUpperCase(), x + width * 0.08, rowY)
+
+    context.fillStyle = '#f4efe7'
+    context.font = `700 ${Math.round(canvas.width * 0.021)}px Georgia`
+    context.textAlign = 'right'
+    context.fillText(value, x + width * 0.92, rowY)
+    context.textAlign = 'left'
+  })
 }
 
 function drawBottomStats(

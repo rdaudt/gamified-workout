@@ -13,6 +13,11 @@ describe('challenge session video helpers', () => {
         elapsedSeconds: 95,
         trackingScore: 83,
         bodyHeight: 0.42,
+        counterPhase: 'down',
+        averageElbowAngle: 98.4,
+        postureConfidence: 0.76,
+        isPushupReady: true,
+        eligibleFrames: 9,
       })
     ).toEqual({
       status: 'live',
@@ -21,6 +26,11 @@ describe('challenge session video helpers', () => {
       elapsedLabel: '1:35',
       trackingLabel: '83%',
       bodyHeight: 0.42,
+      counterPhaseLabel: 'DOWN',
+      elbowAngleLabel: '98°',
+      postureLabel: '76%',
+      readyLabel: 'YES',
+      eligibleFramesLabel: '9',
     })
   })
 
@@ -33,6 +43,11 @@ describe('challenge session video helpers', () => {
         elapsedSeconds: 0,
         trackingScore: 0,
         bodyHeight: 2.5,
+        counterPhase: 'ready',
+        averageElbowAngle: null,
+        postureConfidence: null,
+        isPushupReady: false,
+        eligibleFrames: 0,
       }).bodyHeight
     ).toBe(1)
   })

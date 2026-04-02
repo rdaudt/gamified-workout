@@ -794,6 +794,11 @@ export function PushupChallengeClient() {
             elapsedSeconds: elapsedSecondsRef.current || elapsedSeconds,
             trackingScore: Math.round(calculateTrackingScore(counterStateRef.current)),
             bodyHeight: latestAnalysis?.bodyHeight ?? bodyHeightRef.current,
+            counterPhase: counterStateRef.current.phase,
+            averageElbowAngle: latestAnalysis?.averageElbowAngle ?? null,
+            postureConfidence: latestAnalysis?.postureConfidence ?? null,
+            isPushupReady: latestAnalysis?.isPushupReady ?? false,
+            eligibleFrames: counterStateRef.current.eligibleFrames,
           })
 
           drawComposedChallengeFrame({
