@@ -2,3 +2,10 @@
 node_modules
 .env.local
 coverage
+.claude/
+.superpowers/
+excalidraw.log
+frame1.jpg
+frame2.jpg
+frame3.jpg
+sample.mp4
