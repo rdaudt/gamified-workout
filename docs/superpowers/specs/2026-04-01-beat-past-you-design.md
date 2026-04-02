@@ -1,340 +1,189 @@
 # Beat Past You - Product Design Spec
 
-**Date:** 2026-04-01
-**Working title:** Beat Past You
-**Status:** Rewritten for multi-coach MVP
+**Date:** 2026-04-01  
+**Working title:** Beat Past You  
+**Status:** Challenge-first MVP  
 **Primary platform:** Mobile web
-
----
 
 ## 1. Product Definition
 
-Beat Past You is a free browser-based workout platform for four user groups:
+Beat Past You is a social fitness challenge platform built around self-improvement, visibility, and shareability. The product is not a generic workout tracker. The first production experience is a pushup challenge session designed to be performed on a phone, reviewed instantly, and shared externally.
 
-- **Guests** who want to try the workout flow without registration
-- **Trainees** who want persistent history, cards, and optional coach connection
-- **Coaches** who want discovery, invitations, and branded attribution on coached sessions
-- **Admins** who operate the service, approve coaches, and manage platform continuity
+Primary audiences:
 
-The app uses the device camera to count reps, analyze form, and generate shareable performance cards. The core mechanic remains the same: the user competes against their own history, not against other people.
+- guests who want to try the challenge flow immediately
+- registered challengers who want saved history and coach attachment
+- coaches who want visibility, discovery, and branded challenge attribution
+- admins who approve coaches and keep the platform operable
 
-### Core value by audience
+## 2. Core Product Shape
 
-| Audience | Core value |
-|----------|------------|
-| Trainees | Free rep tracking, progress visibility, workout cards, optional connection to a coach |
-| Coaches | Public discoverability, trainee invitations, branded attribution on coached sessions, future conversion path |
-| Admins | Central moderation and continuity for a multi-coach platform |
+The first enabled activity is pushups, but the product should model exercises generically so pullups, burpees, and other movements can be added later without rethinking the data model.
 
----
+Core v1 flow:
 
-## 2. Identity and Roles
+1. user opens the app on a phone
+2. user sets the phone low in front of them
+3. front camera preview opens in portrait orientation
+4. user starts the pushup challenge manually
+5. the app shows pose overlay, live rep count, and a side elevator that reflects body height
+6. user stops manually
+7. the app shows a shareable result card
+8. the user shares through the mobile native share sheet
 
-The app uses **one account per person**. Roles are additive, not exclusive.
+The top HUD bar shown in the visual reference is out of scope for v1.
 
-- A user may be a **trainee**
-- A user may apply to become a **coach**
-- A user may be promoted to **admin**
-- The same account may hold multiple roles at once
+## 3. Roles and Identity
 
-### Authentication
+Beat Past You uses one account per person. Roles are additive, not exclusive.
 
-- MVP authentication is **email + password**
-- Social auth is deferred to a future iteration
-- There is a **13+ age gate**
-- MVP does not implement parental consent flows
+- a user may be a challenger
+- a user may apply to become a coach
+- a user may be promoted to admin
+- the same account may hold multiple roles
 
----
+MVP authentication remains email and password. Social auth is deferred.
 
-## 3. Guest vs Registered Behavior
-
-### Guest behavior
+## 4. Guest vs Registered Behavior
 
 Guests can:
 
-- complete workout sessions
-- view session results
-- generate cards
-- download and share cards
+- run the full pushup challenge
+- see live pose overlay and rep counting
+- view the result card
+- share through the system share sheet
+- download the card
 
-Guests do **not** persist:
+Guests do not persist:
 
-- workout history
+- challenge history
 - cards
 - profile data
 - coach relationships
-- location data tied to an account
 
-Guest functionality is intentionally full-featured during a session, but completely stateless after the session ends or the page is refreshed.
+Registered challengers can:
 
-### Registered trainee behavior
-
-Registered trainees can:
-
-- persist workout history
-- persist account/profile data
+- persist challenge history
+- persist account and profile data
 - attach or remove a coach
-- keep cards and historical results
+- keep result history with frozen branding snapshots
 
----
+## 5. Coach Relationship Model
 
-## 4. Coach Relationship Model
+A challenger may have zero or one current coach in MVP.
 
-A trainee may have **zero or one current coach** in MVP.
+Relationship rules:
 
-### Relationship rules
+- coach attachment is optional
+- a coach can be attached from the public directory or by invite later
+- removing or replacing a coach affects future sessions only
+- manual coach selection per session is out of scope
+- past saved sessions keep their original coach or app attribution
 
-- A trainee can exist without any coach
-- A trainee can attach a coach by:
-  - an invite/referral link
-  - selecting a coach from the public directory
-- A trainee can remove or replace their coach at any time
-- Manual coach selection per session/card is out of scope
+## 6. Coach Visibility
 
-### Attribution rules
+Coach visibility is a core product goal.
 
-- Future sessions use the coach that is current at the time of the session
-- If a trainee removes a coach, future sessions immediately stop using that coach
-- Past workouts and cards keep the branding and attribution they had when they were created
+Approved coaches should have:
 
----
+- a public directory entry
+- a dedicated public coach page
+- business details rendered on that public page
 
-## 5. Coach Discovery and Visibility
+Directory rules:
 
-Approved coaches may choose whether they appear in the public coach directory.
+- approval and directory visibility are separate states
+- a coach can be approved but hidden
+- only approved, visible coaches appear publicly
 
-### Directory behavior
+Ordinary users do not have public profiles in this phase.
 
-- The coach directory is searchable and browsable
-- Approval and directory visibility are separate concerns
-- A coach can be approved but hidden from the directory
-- Trainees may attach a coach from the directory if they do not already have one
+Teams and gym entities are explicitly out of scope for the current implementation slices.
 
-### No-coach experience
+## 7. Challenge Session Design
 
-If a trainee has no current coach:
+The first live session is portrait-only and front-camera-first.
 
-- cards use **app branding**
-- no coach-specific booking CTA is shown
-- the UI may show a softer prompt to browse the directory
+Required live elements:
 
----
+- camera preview
+- pose skeleton overlay
+- live rep counter
+- elapsed time
+- side elevator showing body height
+- manual controls for start, pause, resume, and stop
 
-## 6. Coach Application and Approval
+Rep counting should use basic depth and lockout thresholds with tunable heuristics. It does not need advanced form-gating in v1.
 
-Coach access is not automatic. A user applies for the coach role from an existing account.
+Persisted session data must include at least:
 
-### Application states
-
-- `pending`
-- `approved`
-- `rejected`
-
-### MVP policy
-
-- Approval uses admin judgment
-- Pending or rejected coach applicants continue using the app as trainees
-- Final required-vs-optional validation rules for coach applications are intentionally deferred
-- The schema should stay flexible enough to evolve without significant migration pain
-
----
-
-## 7. Profiles and Public Data
-
-### Shared account/profile layer
-
-Required:
-
-- `user_name`
-- `email`
-
-Optional:
-
-- `first_name`
-- `last_name`
-- `nationality`
-
-### Coach personal/profile layer
-
-Required:
-
-- `first_name`
-- `last_name`
-- `nickname`
-- `user_name`
-- `email`
-- `phone_number`
-- `picture`
-
-Optional:
-
-- `short_bio`
-- `professional_credentials`
-
-### Coach business layer
-
-All optional in MVP:
-
-- `business_name`
-- `business_motto`
-- `business_logo`
-- `business_location`
-- `business_phone_number`
-- `business_email`
-- social links for:
-  - Instagram
-  - YouTube
-  - Facebook
-  - LinkedIn
-
-### Public data policy
-
-- Public profile/business fields may be shown in the directory and on coached surfaces
-- Personal contact data remains private by default unless future product decisions expose it
-
----
-
-## 8. Workout, Card, and Attribution Rules
-
-Each exercise remains an independent performance stream.
-
-### Session data
-
-Persisted workouts should include:
-
-- exercise type
-- timestamp
+- exercise
+- occurred timestamp
+- elapsed time
 - rep count
-- good-form rep count
-- form score
-- effort score
-- duration
-- session classification
 - attribution snapshot
 
-### Attribution snapshot
+## 8. Sharing
 
-Each persisted workout/card stores a snapshot of branding used at save time:
+Sharing is as important as performing for the intended audience.
 
-- `branding_source = app | coach`
-- nullable coach identifier
-- coach/app display values needed to preserve history after later coach changes
+V1 sharing behavior:
 
-### Card behavior
+- generate a mobile-first result card image
+- primary action opens the mobile native share sheet
+- keep Download as a fallback
 
-- If a current coach exists, the card may use that coach's branding
-- If no current coach exists, the card uses app branding
-- Guests can generate, download, and share cards locally
-- Guest cards are not stored after the session
-- Manual workout photo support, when implemented, is local-only by default
+Explicitly out of scope for v1:
 
----
+- direct Instagram posting
+- Instagram Stories API work
+- in-app feed mechanics
+- video export
+- captions over the result card
 
-## 9. Workout AI and Session Flow
+## 9. Branding and Attribution
 
-The workout engine remains client-first:
+Branding is frozen per saved result.
 
-- pose detection runs on-device
-- rep counting runs on-device
-- form analysis runs on-device
-- no video or raw pose stream is stored
+If a current coach exists, saved results may use coach branding. If no current coach exists, results use app branding.
 
-### Session flow
+Each saved session must retain enough attribution data to preserve the original state even if the user's coach changes later.
 
-1. Open app as guest or registered user
-2. Select exercise
-3. Position device
-4. Start session
-5. Run live pose detection and rep counting
-6. End session
-7. Show result summary and card
-8. Download/share immediately
-9. Persist only if the user is registered and chooses to save
+## 10. Privacy
 
----
-
-## 10. Coach CTA Logic
-
-`CTA` means **call to action**: a prompt or action intended to drive the next step.
-
-Examples:
-
-- "Book a free assessment with Coach X"
-- "Browse coaches"
-
-### Coach CTA rules
-
-- Coach-specific CTA appears only when a current coach exists and branding source is `coach`
-- If no coach is assigned, no coach booking CTA is shown
-- The no-coach state may show a discovery prompt to browse the directory instead
-- Historical workouts/cards keep their original CTA context through attribution snapshotting
-
----
-
-## 11. Admin Model
-
-Admins are service operators, not a separate account type.
-
-### Admin rules
-
-- The first admin is seeded directly in the backend
-- Admins can promote backup admins
-- Admins can approve or reject coach applications
-- Admins can moderate coach role state
-- Admins can trigger password recovery flows
-- Admin impersonation and edit-on-behalf are out of scope for MVP
-
-An admin account may also hold trainee and/or coach roles.
-
----
-
-## 12. Privacy and Location
-
-The app does **not** store:
+The app does not store:
 
 - video
 - camera feed
 - raw pose landmarks
 - audio
 
-Optional location capture is coarse only:
+Only saved result metrics and attribution metadata persist for registered users.
 
-- city
-- region
+## 11. MVP Scope
 
-Exact coordinates are not stored in MVP.
+In scope:
 
----
+- pushup-first mobile challenge flow
+- guest challenge sessions
+- registered challenge history
+- generic exercise catalog with pushups enabled first
+- public coach directory
+- public coach pages
+- coach application and approval foundation
+- result card generation
+- native share-sheet integration
 
-## 13. Scope Boundaries for MVP
+Out of scope:
 
-### In scope
+- Teams
+- public user profiles
+- in-app social feed
+- direct Instagram publishing
+- multi-exercise UI beyond pushups
+- advanced events or competition systems
 
-- free mobile-first web app
-- guest sessions with no persistence
-- registered trainee accounts
-- additive user roles
-- coach applications and admin approval
-- public coach directory with coach-controlled visibility
-- optional trainee-to-coach attachment
-- per-workout attribution snapshots
-- app-branded and coach-branded cards
-- basic admin operations
-
-### Out of scope
-
-- teams
-- events
-- social auth
-- sophisticated coach verification workflows
-- simultaneous multi-coach attachment for trainees
-- manual coach selection per session/card
-- exact location storage
-- parental consent flows
-
----
-
-## 14. Infrastructure Direction
+## 12. Infrastructure Direction
 
 | Concern | MVP choice |
 |---------|------------|
@@ -342,7 +191,7 @@ Exact coordinates are not stored in MVP.
 | Hosting | Vercel |
 | Auth + DB | Supabase |
 | Pose detection | MediaPipe client-side |
-| Quote generation | Server-side API |
-| Card generation | Browser-side rendering/export |
+| Result card generation | Browser-side canvas export |
+| Sharing | Web Share API with download fallback |
 
-The main architectural difference from the earlier version is that branding and CTA behavior are now **per-coach and per-workout snapshot**, not global singleton configuration.
+The key architectural direction is challenge-first, share-first, and coach-visibility-aware rather than generic workout tracking.

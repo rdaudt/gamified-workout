@@ -4,12 +4,26 @@ export type CoachApplicationStatus = 'pending' | 'approved' | 'rejected'
 
 export type BrandingSource = 'app' | 'coach'
 
-export type ExerciseType =
+export type ExerciseId =
   | 'push-ups'
+  | 'pull-ups'
   | 'squats'
   | 'crunches'
   | 'burpees'
   | 'lunges'
+
+export type ExerciseType = ExerciseId
+
+export interface ExerciseCatalogEntry {
+  id: ExerciseId
+  name: string
+  shortLabel: string
+  unitLabel: string
+  description: string
+  isEnabled: boolean
+  orientation: 'portrait' | 'landscape' | 'either'
+  preferredCamera: 'front' | 'rear' | 'either'
+}
 
 export interface Profile {
   id: string
@@ -68,16 +82,19 @@ export interface WorkoutAttributionSnapshot {
   accentColor: string
 }
 
-export interface WorkoutSummary {
+export interface ChallengeSessionSummary {
   id: string
-  exercise: ExerciseType
+  exercise: ExerciseId
   occurredAt: string
+  durationSeconds: number
   goodFormReps: number
   totalReps: number
   formScore: number
   effortScore: number
   attribution: WorkoutAttributionSnapshot
 }
+
+export type WorkoutSummary = ChallengeSessionSummary
 
 export interface CoachDirectoryEntry {
   profile: Profile
@@ -86,8 +103,16 @@ export interface CoachDirectoryEntry {
   directory: CoachDirectorySettings
 }
 
+export interface PublicCoachProfile {
+  profile: Profile
+  coachProfile: CoachProfile
+  businessProfile: CoachBusinessProfile
+  directory: CoachDirectorySettings
+}
+
 export interface GuestSessionResult {
-  exercise: ExerciseType
+  exercise: ExerciseId
+  durationSeconds: number
   goodFormReps: number
   totalReps: number
   formScore: number

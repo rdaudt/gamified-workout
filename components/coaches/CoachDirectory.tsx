@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import type { CoachDirectoryEntry } from '@/lib/types/domain'
 
 export function CoachDirectory({
@@ -21,9 +22,11 @@ export function CoachDirectory({
                 <p className="text-xs uppercase tracking-[0.3em] text-accentSoft">
                   @{coach.profile.userName}
                 </p>
-                <h2 className="mt-1 font-display text-2xl">
-                  {coach.coachProfile.nickname}
-                </h2>
+                <Link href={`/coaches/${coach.profile.userName}`}>
+                  <h2 className="mt-1 font-display text-2xl transition hover:text-accentSoft">
+                    {coach.coachProfile.nickname}
+                  </h2>
+                </Link>
                 <p className="mt-2 text-sm text-ink/75">{coach.coachProfile.shortBio}</p>
               </div>
               <div className="rounded-full border border-line bg-canvas px-3 py-1 text-xs text-signal">
@@ -51,12 +54,18 @@ export function CoachDirectory({
 
             {allowAttach ? (
               <div className="mt-4 flex gap-3">
-                <button className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-canvas">
-                  Attach coach
-                </button>
-                <button className="rounded-full border border-line px-4 py-2 text-sm text-ink/70">
-                  Copy invite link
-                </button>
+                <Link
+                  href={`/coaches/${coach.profile.userName}`}
+                  className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-canvas"
+                >
+                  View coach
+                </Link>
+                <Link
+                  href="/challenge"
+                  className="rounded-full border border-line px-4 py-2 text-sm text-ink/70"
+                >
+                  Open challenge
+                </Link>
               </div>
             ) : null}
           </article>

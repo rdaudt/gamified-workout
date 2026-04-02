@@ -8,9 +8,14 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "test:supabase": "node scripts/test-supabase-access.mjs",
+    "seed:supabase": "node scripts/seed-supabase.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.34",
+    "@supabase/ssr": "^0.10.0",
+    "@supabase/supabase-js": "^2.101.1",
     "next": "14.2.32",
     "react": "18.3.1",
     "react-dom": "18.3.1"

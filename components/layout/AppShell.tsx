@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 
 const navItems = [
   { href: '/', label: 'Overview' },
-  { href: '/workout', label: 'Workout' },
+  { href: '/challenge', label: 'Challenge' },
   { href: '/history', label: 'History' },
   { href: '/coaches', label: 'Coaches' },
   { href: '/account', label: 'Account' },
@@ -34,7 +34,7 @@ export function AppShell({ title, eyebrow, children }: AppShellProps) {
               ) : null}
             </div>
             <div className="rounded-full border border-line bg-panel px-3 py-1 text-xs text-signal">
-              Mobile-first MVP
+              Social challenge MVP
             </div>
           </div>
           <nav className="flex gap-2 overflow-x-auto pb-1">

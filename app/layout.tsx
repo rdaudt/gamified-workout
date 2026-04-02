@@ -4,7 +4,7 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'Beat Past You',
   description:
-    'Multi-coach workout platform with guest sessions, coach discovery, and role-based surfaces.',
+    'Social fitness challenge platform with pushup sessions, shareable result cards, coach discovery, and role-based surfaces.',
 }
 
 export default function RootLayout({

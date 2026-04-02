@@ -1,0 +1,828 @@
+'use client'
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type {
+  DrawingUtils,
+  PoseLandmarker,
+} from '@mediapipe/tasks-vision'
+import { createResultCardBlob } from '@/lib/challenge/result-card'
+import {
+  analyzePushupLandmarks,
+  calculateEffortScore,
+  calculateTrackingScore,
+  defaultPushupThresholds,
+  formatDuration,
+  initialPushupCounterState,
+  updatePushupCounter,
+  type PosePoint,
+  type PushupCounterState,
+} from '@/lib/challenge/pushup'
+import { createWorkoutAttributionSnapshot } from '@/lib/platform/branding'
+import { getExerciseById } from '@/lib/platform/exercises'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import type { Database, Tables } from '@/lib/supabase/database.types'
+import { hasSupabasePublicEnv } from '@/lib/supabase/env'
+import type { WorkoutAttributionSnapshot } from '@/lib/types/domain'
+
+type SessionStatus = 'idle' | 'live' | 'paused' | 'complete'
+type CameraStatus = 'idle' | 'requesting' | 'ready' | 'error'
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'guest' | 'error'
+type PoseConnection = { start: number; end: number }
+
+interface ViewerContext {
+  userId: string | null
+  label: string
+  attribution: WorkoutAttributionSnapshot
+}
+
+type RelationshipPreview = Pick<
+  Tables<'trainee_coach_relationships'>,
+  'coach_user_id' | 'attached_via' | 'updated_at'
+>
+type CoachBrandingPreview = Pick<
+  Tables<'coach_profiles'>,
+  'nickname' | 'booking_url' | 'accent_color'
+>
+type WorkoutInsert = Database['public']['Tables']['workouts']['Insert']
+
+const exercise = getExerciseById('push-ups')
+const wasmPath =
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm'
+const modelAssetPath =
+  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task'
+const appAccentColor = '#8ad1c2'
+const coachAccentColor = '#f06d4f'
+
+export function PushupChallengeClient() {
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const overlayRef = useRef<HTMLCanvasElement | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+  const poseLandmarkerRef = useRef<PoseLandmarker | null>(null)
+  const drawingUtilsRef = useRef<DrawingUtils | null>(null)
+  const poseConnectionsRef = useRef<PoseConnection[]>([])
+  const animationFrameRef = useRef<number | null>(null)
+  const lastVideoTimeRef = useRef(-1)
+  const sessionStatusRef = useRef<SessionStatus>('idle')
+  const counterStateRef = useRef<PushupCounterState>(initialPushupCounterState)
+  const sessionStartMsRef = useRef<number | null>(null)
+  const pauseStartedAtRef = useRef<number | null>(null)
+  const pausedMsRef = useRef(0)
+  const sessionOccurredAtRef = useRef<string | null>(null)
+  const elapsedSecondsRef = useRef(0)
+  const viewerContextRef = useRef<ViewerContext>({
+    userId: null,
+    label: 'Guest challenger',
+    attribution: createWorkoutAttributionSnapshot({
+      relationship: {
+        traineeUserId: 'guest',
+        coachUserId: null,
+        attachedVia: 'none',
+        updatedAt: new Date().toISOString(),
+      },
+      appAccentColor,
+    }),
+  })
+
+  const [cameraStatus, setCameraStatus] = useState<CameraStatus>('idle')
+  const [cameraError, setCameraError] = useState<string | null>(null)
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>('idle')
+  const [repCount, setRepCount] = useState(0)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [bodyHeight, setBodyHeight] = useState(1)
+  const [trackingScore, setTrackingScore] = useState(0)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [viewerLabel, setViewerLabel] = useState('Guest challenger')
+  const [branding, setBranding] = useState<WorkoutAttributionSnapshot>(
+    viewerContextRef.current.attribution
+  )
+
+  const canStart = cameraStatus === 'ready' && sessionStatus !== 'live'
+  const accentStyle = useMemo(
+    () => ({ boxShadow: `0 0 0 1px ${branding.accentColor}33 inset` }),
+    [branding.accentColor]
+  )
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadViewerContext() {
+      if (!hasSupabasePublicEnv()) {
+        return
+      }
+
+      try {
+        const supabase = createSupabaseBrowserClient()
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+
+        if (!user || cancelled) {
+          return
+        }
+
+        const { data: relationshipData } = await supabase
+          .from('trainee_coach_relationships')
+          .select('coach_user_id, attached_via, updated_at')
+          .eq('trainee_user_id', user.id)
+          .maybeSingle()
+        const relationship = relationshipData as RelationshipPreview | null
+
+        const label =
+          typeof user.user_metadata.user_name === 'string'
+            ? user.user_metadata.user_name
+            : user.email?.split('@')[0] ?? 'Registered challenger'
+
+        let attribution = createWorkoutAttributionSnapshot({
+          relationship: {
+            traineeUserId: user.id,
+            coachUserId: relationship?.coach_user_id ?? null,
+            attachedVia: relationship?.attached_via ?? 'none',
+            updatedAt: relationship?.updated_at ?? new Date().toISOString(),
+          },
+          appAccentColor,
+        })
+
+        if (relationship?.coach_user_id) {
+          const { data: coachProfileData } = await supabase
+            .from('coach_profiles')
+            .select('nickname, booking_url, accent_color')
+            .eq('user_id', relationship.coach_user_id)
+            .maybeSingle()
+          const coachProfile = coachProfileData as CoachBrandingPreview | null
+
+          attribution = createWorkoutAttributionSnapshot({
+            relationship: {
+              traineeUserId: user.id,
+              coachUserId: relationship.coach_user_id,
+              attachedVia: relationship.attached_via,
+              updatedAt: relationship.updated_at,
+            },
+            coachDisplayName: coachProfile?.nickname ?? 'Current coach',
+            coachBookingUrl: coachProfile?.booking_url ?? undefined,
+            coachAccentColor: coachProfile?.accent_color ?? coachAccentColor,
+            appAccentColor,
+          })
+        }
+
+        if (!cancelled) {
+          const nextContext = {
+            userId: user.id,
+            label,
+            attribution,
+          }
+
+          viewerContextRef.current = nextContext
+          setViewerLabel(label)
+          setBranding(attribution)
+        }
+      } catch {
+        // Guest mode remains available even if viewer bootstrap fails.
+      }
+    }
+
+    loadViewerContext()
+
+    return () => {
+      cancelled = true
+      stopAnimationLoop()
+      stopCameraStream()
+      poseLandmarkerRef.current?.close()
+      poseLandmarkerRef.current = null
+      drawingUtilsRef.current = null
+    }
+  }, [])
+
+  async function enableCamera() {
+    if (cameraStatus === 'requesting' || cameraStatus === 'ready') {
+      return
+    }
+
+    setCameraStatus('requesting')
+    setCameraError(null)
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('Camera capture is not available in this browser.')
+      }
+
+      const video = videoRef.current
+      const canvas = overlayRef.current
+
+      if (!video || !canvas) {
+        throw new Error('Challenge capture elements are not mounted.')
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 720 },
+          height: { ideal: 1280 },
+        },
+        audio: false,
+      })
+
+      streamRef.current = stream
+      video.srcObject = stream
+      await video.play()
+
+      const vision = await import('@mediapipe/tasks-vision')
+      const fileset = await vision.FilesetResolver.forVisionTasks(wasmPath)
+      const poseLandmarker = await vision.PoseLandmarker.createFromOptions(fileset, {
+        baseOptions: {
+          modelAssetPath,
+          delegate: 'GPU',
+        },
+        runningMode: 'VIDEO',
+        numPoses: 1,
+        minPoseDetectionConfidence: 0.5,
+        minPosePresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      })
+
+      const context = canvas.getContext('2d')
+
+      if (!context) {
+        throw new Error('Overlay canvas could not be initialized.')
+      }
+
+      poseLandmarkerRef.current = poseLandmarker
+      drawingUtilsRef.current = new vision.DrawingUtils(context)
+      poseConnectionsRef.current = vision.PoseLandmarker.POSE_CONNECTIONS
+      setCameraStatus('ready')
+      startAnimationLoop()
+    } catch (error) {
+      stopCameraStream()
+      setCameraStatus('error')
+      setCameraError(error instanceof Error ? error.message : 'Unable to access camera.')
+    }
+  }
+
+  function startSession() {
+    counterStateRef.current = initialPushupCounterState
+    sessionStartMsRef.current = performance.now()
+    pauseStartedAtRef.current = null
+    pausedMsRef.current = 0
+    sessionOccurredAtRef.current = new Date().toISOString()
+    elapsedSecondsRef.current = 0
+    sessionStatusRef.current = 'live'
+    setSessionStatus('live')
+    setRepCount(0)
+    setElapsedSeconds(0)
+    setTrackingScore(0)
+    setBodyHeight(1)
+    setSaveStatus('idle')
+    setSaveMessage(null)
+  }
+
+  function pauseSession() {
+    if (sessionStatusRef.current !== 'live') {
+      return
+    }
+
+    pauseStartedAtRef.current = performance.now()
+    sessionStatusRef.current = 'paused'
+    setSessionStatus('paused')
+  }
+
+  function resumeSession() {
+    if (sessionStatusRef.current !== 'paused') {
+      return
+    }
+
+    if (pauseStartedAtRef.current) {
+      pausedMsRef.current += performance.now() - pauseStartedAtRef.current
+    }
+
+    pauseStartedAtRef.current = null
+    sessionStatusRef.current = 'live'
+    setSessionStatus('live')
+  }
+
+  async function stopSession() {
+    if (sessionStatusRef.current === 'idle') {
+      return
+    }
+
+    const durationSeconds = computeElapsedSeconds()
+    elapsedSecondsRef.current = durationSeconds
+    sessionStatusRef.current = 'complete'
+    setSessionStatus('complete')
+    setElapsedSeconds(durationSeconds)
+
+    const context = viewerContextRef.current
+
+    if (!context.userId) {
+      setSaveStatus('guest')
+      setSaveMessage('Guest mode keeps the result shareable but does not persist it.')
+      return
+    }
+
+    if (counterStateRef.current.reps <= 0) {
+      setSaveStatus('idle')
+      setSaveMessage('No reps were captured, so nothing was saved.')
+      return
+    }
+
+    setSaveStatus('saving')
+    setSaveMessage('Saving your challenge result...')
+
+    try {
+      const supabase = createSupabaseBrowserClient()
+      const tracking = Math.round(calculateTrackingScore(counterStateRef.current))
+      const effort = calculateEffortScore(counterStateRef.current.reps, durationSeconds)
+      const workoutInsert: WorkoutInsert = {
+        user_id: context.userId,
+        exercise: 'push-ups',
+        occurred_at: sessionOccurredAtRef.current ?? new Date().toISOString(),
+        duration_seconds: durationSeconds,
+        good_form_reps: counterStateRef.current.reps,
+        total_reps: counterStateRef.current.reps,
+        form_score: tracking,
+        effort_score: effort,
+        session_classification: 'pushup-challenge',
+        branding_source: context.attribution.brandingSource,
+        coach_id: context.attribution.coachId,
+        coach_display_name: context.attribution.coachDisplayName,
+        coach_booking_url: context.attribution.coachBookingUrl,
+        accent_color: context.attribution.accentColor,
+      }
+
+      const { error } = await supabase.from('workouts').insert(workoutInsert as never)
+
+      if (error) {
+        throw error
+      }
+
+      setSaveStatus('saved')
+      setSaveMessage('Challenge result saved to your history.')
+    } catch (error) {
+      setSaveStatus('error')
+      setSaveMessage(
+        error instanceof Error ? error.message : 'Unable to save your challenge result.'
+      )
+    }
+  }
+
+  function resetSession() {
+    sessionStatusRef.current = 'idle'
+    counterStateRef.current = initialPushupCounterState
+    sessionStartMsRef.current = null
+    pauseStartedAtRef.current = null
+    pausedMsRef.current = 0
+    sessionOccurredAtRef.current = null
+    elapsedSecondsRef.current = 0
+    setSessionStatus('idle')
+    setRepCount(0)
+    setElapsedSeconds(0)
+    setTrackingScore(0)
+    setBodyHeight(1)
+    setSaveStatus('idle')
+    setSaveMessage(null)
+  }
+
+  function cancelChallenge() {
+    resetSession()
+    stopAnimationLoop()
+    stopCameraStream()
+    lastVideoTimeRef.current = -1
+    poseLandmarkerRef.current?.close()
+    poseLandmarkerRef.current = null
+    drawingUtilsRef.current = null
+
+    const video = videoRef.current
+    const canvas = overlayRef.current
+
+    if (video) {
+      video.pause()
+      video.srcObject = null
+    }
+
+    if (canvas) {
+      const context = canvas.getContext('2d')
+      context?.clearRect(0, 0, canvas.width, canvas.height)
+    }
+
+    setCameraStatus('idle')
+    setCameraError(null)
+  }
+
+  async function shareResult() {
+    try {
+      const blob = await createCardBlob()
+      const file = new File([blob], 'beat-past-you-pushup-result.png', {
+        type: 'image/png',
+      })
+      const shareData = {
+        files: [file],
+        title: 'Beat Past You result',
+        text: `I logged ${repCount} pushups in ${formatDuration(elapsedSeconds)} on Beat Past You.`,
+      }
+
+      if (navigator.canShare?.(shareData)) {
+        await navigator.share(shareData)
+        return
+      }
+
+      if (navigator.share) {
+        await navigator.share({
+          title: shareData.title,
+          text: shareData.text,
+        })
+        return
+      }
+
+      await downloadResult()
+    } catch {
+      // Ignore user-cancelled share interactions.
+    }
+  }
+
+  async function downloadResult() {
+    const blob = await createCardBlob()
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'beat-past-you-pushup-result.png'
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  async function createCardBlob() {
+    return createResultCardBlob({
+      title: 'Pushup challenge',
+      exercise: 'push-ups',
+      reps: repCount,
+      durationSeconds: elapsedSecondsRef.current || elapsedSeconds,
+      occurredAt: sessionOccurredAtRef.current ?? new Date().toISOString(),
+      attribution: branding,
+    })
+  }
+
+  function startAnimationLoop() {
+    stopAnimationLoop()
+
+    const loop = () => {
+      const video = videoRef.current
+      const canvas = overlayRef.current
+      const poseLandmarker = poseLandmarkerRef.current
+      const drawingUtils = drawingUtilsRef.current
+
+      if (!video || !canvas || !poseLandmarker || !drawingUtils) {
+        animationFrameRef.current = requestAnimationFrame(loop)
+        return
+      }
+
+      const context = canvas.getContext('2d')
+
+      if (!context) {
+        animationFrameRef.current = requestAnimationFrame(loop)
+        return
+      }
+
+      syncCanvasSize(canvas, video)
+      context.clearRect(0, 0, canvas.width, canvas.height)
+
+      const now = performance.now()
+
+      if (sessionStatusRef.current === 'live') {
+        const nextElapsedSeconds = computeElapsedSeconds()
+
+        if (nextElapsedSeconds !== elapsedSecondsRef.current) {
+          elapsedSecondsRef.current = nextElapsedSeconds
+          setElapsedSeconds(nextElapsedSeconds)
+        }
+      }
+
+      if (video.readyState >= 2 && video.currentTime !== lastVideoTimeRef.current) {
+        lastVideoTimeRef.current = video.currentTime
+        const result = poseLandmarker.detectForVideo(video, now)
+        const landmarks = result.landmarks[0]
+
+        if (landmarks) {
+          drawingUtils.drawConnectors(landmarks, poseConnectionsRef.current, {
+            color: '#ff6b68',
+            lineWidth: 4,
+          })
+          drawingUtils.drawLandmarks(landmarks, {
+            color: '#ffd1b0',
+            radius: 3,
+          })
+
+          const analysis = analyzePushupLandmarks(landmarks as PosePoint[])
+
+          if (analysis) {
+            setBodyHeight((current) => current * 0.7 + analysis.bodyHeight * 0.3)
+
+            if (sessionStatusRef.current === 'live') {
+              const update = updatePushupCounter(
+                counterStateRef.current,
+                analysis,
+                defaultPushupThresholds
+              )
+
+              counterStateRef.current = update.nextState
+              setTrackingScore(
+                Math.round(calculateTrackingScore(counterStateRef.current))
+              )
+
+              if (update.incremented) {
+                setRepCount(update.nextState.reps)
+              }
+            }
+          }
+        }
+      }
+
+      animationFrameRef.current = requestAnimationFrame(loop)
+    }
+
+    animationFrameRef.current = requestAnimationFrame(loop)
+  }
+
+  function stopAnimationLoop() {
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+  }
+
+  function stopCameraStream() {
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+  }
+
+  function computeElapsedSeconds() {
+    if (!sessionStartMsRef.current) {
+      return elapsedSecondsRef.current
+    }
+
+    const now = performance.now()
+    const activePauseMs =
+      sessionStatusRef.current === 'paused' && pauseStartedAtRef.current
+        ? now - pauseStartedAtRef.current
+        : 0
+
+    return Math.max(
+      0,
+      Math.round((now - sessionStartMsRef.current - pausedMsRef.current - activePauseMs) / 1000)
+    )
+  }
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
+      <section className="rounded-[2rem] border border-line bg-panel p-4 shadow-glow">
+        <div className="rounded-[1.75rem] border border-line bg-canvas/80 p-3">
+          <div className="relative overflow-hidden rounded-[1.5rem] border border-line bg-black">
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              playsInline
+              className="aspect-[3/4] w-full scale-x-[-1] object-cover"
+            />
+            <canvas
+              ref={overlayRef}
+              className="pointer-events-none absolute inset-0 h-full w-full scale-x-[-1]"
+            />
+            <div className="pointer-events-none absolute left-4 top-4 rounded-full bg-black/45 px-3 py-1 text-[11px] uppercase tracking-[0.25em] text-accentSoft">
+              Front camera / portrait
+            </div>
+            <div className="absolute bottom-4 right-3 flex h-[58%] w-6 items-end rounded-full border border-line bg-canvas/60 p-1">
+              <div className="relative w-full rounded-full bg-panelAlt">
+                <div
+                  className="absolute inset-x-0 h-8 rounded-full border border-canvas bg-signal transition-[bottom]"
+                  style={{ bottom: `${bodyHeight * 100}%` }}
+                />
+                <div className="h-48 rounded-full bg-gradient-to-t from-[#143846] to-[#244a57]" />
+              </div>
+            </div>
+          </div>
+
+          <div
+            className="mt-4 rounded-[1.5rem] border border-line bg-panel p-4"
+            style={accentStyle}
+          >
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <StatTile label="Reps" value={repCount.toString()} />
+              <StatTile label="Elapsed" value={formatDuration(elapsedSeconds)} />
+              <StatTile label="Tracking" value={`${trackingScore}%`} />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              {(cameraStatus === 'idle' || cameraStatus === 'error') && (
+                <button
+                  onClick={enableCamera}
+                  className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-canvas"
+                >
+                  {cameraStatus === 'error' ? 'Try camera again' : 'Enable front camera'}
+                </button>
+              )}
+
+              {cameraStatus === 'requesting' && (
+                <button
+                  disabled
+                  className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-canvas/70"
+                >
+                  Connecting camera...
+                </button>
+              )}
+
+              {canStart && sessionStatus !== 'complete' && (
+                <button
+                  onClick={startSession}
+                  className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-canvas"
+                >
+                  Start challenge
+                </button>
+              )}
+
+              {sessionStatus === 'live' && (
+                <>
+                  <button
+                    onClick={pauseSession}
+                    className="rounded-full border border-line px-4 py-2 text-sm text-ink/75"
+                  >
+                    Pause
+                  </button>
+                  <button
+                    onClick={stopSession}
+                    className="rounded-full border border-accent px-4 py-2 text-sm text-accentSoft"
+                  >
+                    Stop
+                  </button>
+                </>
+              )}
+
+              {sessionStatus === 'paused' && (
+                <>
+                  <button
+                    onClick={resumeSession}
+                    className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-canvas"
+                  >
+                    Resume
+                  </button>
+                  <button
+                    onClick={stopSession}
+                    className="rounded-full border border-accent px-4 py-2 text-sm text-accentSoft"
+                  >
+                    Finish
+                  </button>
+                </>
+              )}
+
+              {sessionStatus === 'complete' && (
+                <button
+                  onClick={resetSession}
+                  className="rounded-full border border-line px-4 py-2 text-sm text-ink/75"
+                >
+                  Reset
+                </button>
+              )}
+
+              {cameraStatus === 'ready' && (
+                <button
+                  onClick={cancelChallenge}
+                  className="rounded-full border border-line px-4 py-2 text-sm text-ink/75"
+                >
+                  Cancel challenge
+                </button>
+              )}
+            </div>
+
+            {cameraError ? (
+              <p className="mt-3 text-sm text-accentSoft">{cameraError}</p>
+            ) : (
+              <p className="mt-3 text-sm text-ink/68">
+                Prop the phone low in front of you, stay centered, and let the body-height
+                rail echo your pushup depth live.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4">
+        <article className="rounded-[2rem] border border-line bg-panel p-6 shadow-glow">
+          <p className="text-xs uppercase tracking-[0.3em] text-accentSoft">
+            {exercise.name}
+          </p>
+          <h2 className="mt-3 font-display text-4xl leading-tight">
+            Challenge yourself first. Share it before the moment cools off.
+          </h2>
+          <p className="mt-4 text-sm text-ink/72">
+            Beat Past You is tuned for portrait, front-camera pushup sessions that stay
+            quick, visual, and easy to share. Reps and elapsed time are the core signal.
+          </p>
+          <div className="mt-5 grid gap-3 text-sm text-ink/75">
+            <div className="rounded-2xl bg-panelAlt px-4 py-3">
+              Pose overlay tracks the challenge in real time.
+            </div>
+            <div className="rounded-2xl bg-panelAlt px-4 py-3">
+              Guests can finish and share instantly with no account required.
+            </div>
+            <div className="rounded-2xl bg-panelAlt px-4 py-3">
+              Signed-in challengers save sessions and coach branding snapshots automatically.
+            </div>
+          </div>
+        </article>
+
+        <article className="rounded-[2rem] border border-line bg-panel p-6 shadow-glow">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-signal">Result card</p>
+              <h2 className="mt-2 font-display text-3xl">Share-ready by default</h2>
+            </div>
+            <div className="rounded-full border border-line bg-panelAlt px-3 py-1 text-xs text-ink/70">
+              {viewerLabel}
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-[1.75rem] border border-line bg-[#0d1725] p-5">
+            <div className="rounded-[1.35rem] border border-line bg-gradient-to-b from-[#101f30] to-[#0b1521] p-5">
+              <p className="text-xs uppercase tracking-[0.3em] text-accentSoft">
+                Beat Past You
+              </p>
+              <h3 className="mt-4 font-display text-6xl text-ink">{repCount}</h3>
+              <p className="mt-2 text-sm uppercase tracking-[0.28em] text-signal">
+                pushups logged
+              </p>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <MetricCard label="Elapsed" value={formatDuration(elapsedSeconds)} />
+                <MetricCard
+                  label="Branding"
+                  value={
+                    branding.brandingSource === 'coach'
+                      ? branding.coachDisplayName ?? 'Current coach'
+                      : 'Beat Past You'
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              onClick={shareResult}
+              disabled={sessionStatus !== 'complete'}
+              className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-canvas disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Share
+            </button>
+            <button
+              onClick={downloadResult}
+              disabled={sessionStatus !== 'complete'}
+              className="rounded-full border border-line px-4 py-2 text-sm text-ink/75 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Download
+            </button>
+          </div>
+
+          <p className="mt-3 text-sm text-ink/68">
+            Share uses the mobile system share sheet when available. Direct Instagram posting
+            stays out of scope for this release.
+          </p>
+
+          {saveMessage ? (
+            <p
+              className={`mt-3 text-sm ${
+                saveStatus === 'error' ? 'text-accentSoft' : 'text-signal'
+              }`}
+            >
+              {saveMessage}
+            </p>
+          ) : null}
+        </article>
+      </section>
+    </div>
+  )
+}
+
+function StatTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-panelAlt px-3 py-4">
+      <p className="text-[11px] uppercase tracking-[0.28em] text-ink/45">{label}</p>
+      <p className="mt-2 font-display text-3xl text-ink">{value}</p>
+    </div>
+  )
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-line bg-[#132336] px-4 py-4">
+      <p className="text-xs uppercase tracking-[0.28em] text-ink/45">{label}</p>
+      <p className="mt-3 font-display text-3xl text-ink">{value}</p>
+    </div>
+  )
+}
+
+function syncCanvasSize(canvas: HTMLCanvasElement, video: HTMLVideoElement) {
+  if (!video.videoWidth || !video.videoHeight) {
+    return
+  }
+
+  if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+  }
+}

@@ -1,307 +1,136 @@
-# Beat Past You - Implementation Plan
-
-## Goal
-
-Turn the repo into a working multi-coach platform foundation that matches the rewritten product model:
-
-- free mobile-first web app
-- guest sessions with no persistence
-- one account with additive roles
-- optional trainee-to-coach relationship
-- coach approval and directory visibility model
-- per-workout branding snapshot rules
-
-This plan replaces the earlier singleton-trainer architecture.
-
----
-
-## Phase 0: Documentation Reset
-
-Deliverables:
-
-- rewritten product spec aligned with the platform model
-- rewritten implementation plan aligned with the platform model
-
-Completed changes should establish the new source of truth for:
-
-- account and role model
-- guest vs registered behavior
-- coach relationship lifecycle
-- coach approval and visibility
-- app branding vs coach branding
-- frozen historical attribution
-
----
-
-## Phase 1: Platform Foundation
-
-Deliverables:
-
-- Next.js App Router project scaffold
-- TypeScript and Tailwind configured
-- base route structure for guest, trainee, coach, and admin surfaces
-- shared role and branding types
-- profile-first data model definitions
-
-### Required foundations
-
-- `app` directory scaffold
-- `lib/types` for public domain models
-- mobile-first layout shell
-- email/password auth placeholders
-- guest-safe state boundaries
-
-### Core public types
-
-Define these explicitly in code:
-
-- `UserRole = 'trainee' | 'coach' | 'admin'`
-- `CoachApplicationStatus = 'pending' | 'approved' | 'rejected'`
-- `BrandingSource = 'app' | 'coach'`
-- `CurrentCoachRelationship`
-- `WorkoutAttributionSnapshot`
-- `CoachProfile`
-- `CoachBusinessProfile`
-- `CoachDirectorySettings`
-
----
-
-## Phase 2: Data Model and Auth
-
-Deliverables:
-
-- database-facing model definitions for the platform
-- auth-compatible profile layer
-- zero-or-one current coach relationship model
-
-### Replace singleton trainer configuration
-
-Do **not** use a single `admin_config` table for trainer branding.
-
-Use platform entities instead:
-
-- `profiles`
-- `user_roles`
-- `coach_profiles`
-- `coach_business_profiles`
-- `coach_applications`
-- `trainee_coach_relationships`
-- `coach_directory_settings`
-- optional `coach_invite_links`
-
-### Workout persistence rules
-
-Persist workouts only for registered users.
-
-Saved workouts must carry attribution snapshot fields sufficient to preserve history even after a coach change:
-
-- `branding_source`
-- nullable `coach_id`
-- coach/app display values used at save time
-
----
-
-## Phase 3: Routing and Product Surfaces
-
-Deliverables:
-
-- account/profile settings
-- coach self-service pages
-- admin operations pages
-- public coach directory
-
-### Route groups
-
-- public/guest workout entry
-- authenticated trainee surfaces
-- coach application and coach profile management
-- service admin pages
-
-### UX constraints
-
-- phone-first layout and interaction model
-- desktop supported secondarily
-- no guest persistence beyond session scope
-
----
-
-## Phase 4: Coach Platform
-
-Deliverables:
-
-- coach application flow
-- coach self-service profile editing
-- business profile editing
-- directory visibility toggle
-- invite-link scaffolding
-
-### Rules
-
-- users apply for coach role from existing accounts
-- coach applications have states:
-  - `pending`
-  - `approved`
-  - `rejected`
-- approved coaches can choose directory visibility independently
-- pending/rejected users still operate as trainees
-
-Validation for coach application fields is provisional and should remain easy to evolve.
-
----
-
-## Phase 5: Trainee Relationship Layer
-
-Deliverables:
-
-- current coach attach flow
-- current coach replace flow
-- current coach remove flow
-- invite-link auto-attach support
-
-### Rules
-
-- zero-or-one current coach per trainee
-- coach assignment optional
-- coach can be attached from directory or invite
-- no manual coach choice per card/session
-- removing a coach affects future sessions immediately
-- past sessions/cards retain original attribution
-
----
-
-## Phase 6: Workout Core
-
-Deliverables:
-
-- camera workout session flow
-- pose detection wrapper
-- rep counting pipeline
-- result screen shell
-
-### Behavioral rules
-
-- guests and registered users get the same functional workout experience during a session
-- guests do not persist workouts after session end
-- registered users may persist results and history
-
----
-
-## Phase 7: Cards and CTA Logic
-
-Deliverables:
-
-- card generation for app-branded and coach-branded sessions
-- no-coach discovery prompt behavior
-- attribution snapshot storage path for registered users
-
-### Card rules
-
-- if current coach exists, use coach branding
-- if no current coach exists, use app branding
-- guests can download/share cards locally
-- guest cards are not stored after the session
-
-### CTA rules
-
-`CTA` means call to action.
-
-- coach-specific CTA only appears when a current coach exists
-- no-coach state should not show a coach booking CTA
-- no-coach state may show a coach directory prompt
-- saved history must preserve the CTA context that existed when the workout was created
-
----
-
-## Phase 8: Admin Operations
-
-Deliverables:
-
-- coach approval queue
-- approve/reject actions
-- admin promotion workflow
-- basic moderation hooks
-
-### Admin rules
-
-- initial admin is seeded manually in backend
-- admins can create backup admins
-- admins can approve/reject coach applications
-- admins can promote users to admin
-- admins can moderate coach role state
-- password recovery entry points should exist
-- impersonation/edit-on-behalf remains out of scope
-
----
-
-## Phase 9: Growth and Discovery
-
-Deliverables:
-
-- simple share/referral link model
-- no-coach directory prompts
-- public coach discovery surface
-
-### Constraints
-
-- keep invite and referral model simple in MVP
-- do not build full roster management yet
-- keep teams/events fully out of current implementation
-
----
-
-## Initial File and Module Targets
-
-Create or maintain these groups of files as the first implementation slice:
-
-- project scaffold files:
-  - `package.json`
-  - `tsconfig.json`
-  - `next.config.ts`
-  - `tailwind.config.ts`
-- app shell:
-  - `app/layout.tsx`
-  - `app/page.tsx`
-  - `app/workout/page.tsx`
-  - `app/history/page.tsx`
-  - `app/coaches/page.tsx`
-  - `app/account/page.tsx`
-  - `app/coach/page.tsx`
-  - `app/admin/page.tsx`
-- domain models:
-  - `lib/types/domain.ts`
-  - `lib/platform/mock-data.ts`
-- shared UI:
-  - `components/layout/AppShell.tsx`
-  - `components/coaches/CoachDirectory.tsx`
-  - `components/account/RoleBadges.tsx`
-
----
+# Beat Past You: Revised Product and Delivery Plan
+
+## Summary
+
+Beat Past You is a social fitness challenge platform built around self-improvement, visibility, and shareability, not a generic workout tracker. The first real experience is a portrait, front-camera, pushup challenge session that tracks live reps and elapsed time, then produces a shareable result card opened through the mobile native share sheet.
+
+The near-term product optimizes for:
+
+- pushups only in the UI, with a generic exercise model underneath
+- external sharing as a first-class feature
+- public coach discovery and public coach pages
+- no Teams yet
+- no public user profiles
+- no in-app feed
+- manual start and stop session flow
+- saved session metrics in Supabase
+
+## Key Product Decisions
+
+- Keep Beat Past You as the working name.
+- Frame the product as a social self-challenge platform, not a generic workout app.
+- Treat sharing as equally important to performing the session.
+- Model exercises generically, but enable only pushups in the first release.
+- The first live session uses:
+  - portrait orientation
+  - front camera
+  - phone propped low in front
+  - pose overlay
+  - rep counter
+  - side elevator showing body height
+- Omit the top HUD bar shown in the reference for v1.
+- Use manual stop instead of target-based or timer-based completion.
+- Persist rep count and elapsed time so future derived metrics can be computed later.
+- Use a result card image as the first share artifact, not a clip.
+- Use the mobile native share sheet for v1 sharing.
+- Do not implement direct Instagram publishing in the near term.
+- Do not include caption text on result cards in v1.
+- Coach visibility includes:
+  - directory listing
+  - public coach page
+  - business details rendered on that page
+- Teams and gym entities are explicitly deferred.
+
+## Implementation Changes
+
+### Product and copy
+
+- Rewrite product copy, metadata, and planning language around challenge, session, result, share, and visibility.
+- Remove generic workout-tracker framing from user-facing surfaces where it shapes expectations.
+
+### Domain and data model
+
+- Introduce a generic exercise catalog and seed pushups as the first enabled exercise.
+- Shift app-facing concepts toward challenge session terminology while keeping the existing `workouts` table as the first persistence boundary.
+- Persist session records with at least:
+  - exercise reference
+  - occurred timestamp
+  - elapsed time
+  - rep count
+  - attribution snapshot
+- Preserve the existing attribution model for app-vs-coach branding.
+- Keep Teams out of the immediate schema and UI plan.
+
+### Live pushup session
+
+- Build the first session screen specifically for portrait mobile.
+- Use front camera capture with setup guidance for low propped placement.
+- Render:
+  - live camera preview
+  - pose skeleton overlay
+  - live pushup rep count
+  - side elevator that tracks vertical pushup position
+  - manual controls to start, pause, resume, and stop
+- Use basic depth and lockout thresholds with tunable heuristics for rep counting.
+- Persist both reps and elapsed time for authenticated users. Guests remain stateless.
+
+### Result and sharing
+
+- Generate a mobile-first result card image after session completion.
+- Provide a primary Share action that invokes the system share sheet on mobile.
+- Keep Download as a fallback action.
+- Do not implement:
+  - direct Instagram feed publishing
+  - Stories-specific API work
+  - session video export
+  - in-app post or feed mechanics
+
+### Coach visibility
+
+- Keep the public coach directory.
+- Add a dedicated public coach page that combines:
+  - coach identity and profile
+  - business profile details
+  - business branding where available
+- Keep ordinary users private in-app. Do not add public user profile pages yet.
+
+## Recommended Delivery Order
+
+1. Rewrite the spec and plan around challenge-first terminology.
+2. Introduce the generic exercise and session model while keeping pushups as the only enabled exercise.
+3. Implement the live pushup session shell and portrait challenge UI.
+4. Implement pushup pose tracking, rep counting, and elapsed-time capture.
+5. Persist session results for authenticated users.
+6. Generate result cards and integrate native share-sheet flow.
+7. Add public coach pages and connect them to directory entries.
+8. Continue auth, account, and history surfaces around the saved session model.
 
 ## Test Plan
 
-Verify these behaviors as implementation grows:
+- Pushup session opens in portrait and uses the expected front-camera setup flow.
+- Manual start and stop record elapsed time accurately.
+- Rep counting increments only on valid pushup cycles using depth and lockout heuristics.
+- Side elevator reflects the athlete's live vertical position.
+- Guests can complete a session and share or download a result card without persistence.
+- Registered users can save a session and later view it in history.
+- Saved sessions persist:
+  - exercise
+  - elapsed time
+  - rep count
+  - attribution snapshot
+- Mobile share action opens the native or system share sheet successfully.
+- Result cards are visually suitable for mobile sharing destinations.
+- Public coach directory shows only approved, visible coaches.
+- Public coach page renders coach data and business details correctly.
+- No public user profile or in-app feed behavior is introduced.
 
-- guest can complete a session, view result, and download/share a card without persistence
-- registered trainee can save workout history
-- user with no coach gets app branding and a directory prompt, not a coach-specific CTA
-- coach invite link can attach the current coach
-- trainee can attach a coach from the directory
-- trainee can remove or replace a coach and future sessions switch immediately
-- historical workouts/cards keep original attribution after coach changes
-- pending/rejected coach applicants still function as trainees
-- approved coach can toggle directory visibility independently from approval state
-- admin can approve/reject coaches and promote admins
-- one account can carry multiple roles
-- optional location is coarse-only when present
+## Assumptions and Defaults
 
----
-
-## Defaults and Assumptions
-
-- email/password only in MVP
-- guest flows are stateless but otherwise feature-complete
-- coach application strict validation remains provisional
-- exact location is never stored
-- no manual per-session/per-card coach selection
-- no multi-coach simultaneous trainee relationships
-- teams and events remain future work
+- Beat Past You remains the working product name.
+- Pushups are the only enabled exercise in the first release.
+- The underlying data model still supports future exercises.
+- Teams are deferred entirely from the next implementation slices.
+- External sharing via the native share sheet is the correct v1 sharing solution.
+- Direct Instagram posting is explicitly deferred.
+- Caption overlays are excluded from v1 result cards.
+- The top session HUD bar is excluded from v1 until it has a clear product meaning.

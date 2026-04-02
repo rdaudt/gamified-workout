@@ -2,17 +2,17 @@ import Link from 'next/link'
 import { AppShell } from '@/components/layout/AppShell'
 
 const pillars = [
-  'Guests can do the full session flow without creating an account.',
+  'Guests can complete the full pushup challenge without creating an account.',
   'One account can carry trainee, coach, and admin roles.',
   'Coach relationships are optional and zero-or-one in MVP.',
-  'Branding is frozen per saved workout, not globally reassigned later.',
+  'Branding is frozen per saved challenge result, not globally reassigned later.',
 ]
 
 export default function HomePage() {
   return (
     <AppShell
-      title="Platform Overview"
-      eyebrow="The repo now starts from a multi-coach platform foundation instead of a single-trainer app."
+      title="Challenge Platform"
+      eyebrow="Beat Past You is being built as a social fitness challenge platform, not a generic workout tracker."
     >
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-[2rem] border border-line bg-panel p-6 shadow-glow">
@@ -20,11 +20,12 @@ export default function HomePage() {
             Canonical MVP
           </p>
           <h2 className="mt-3 font-display text-4xl leading-tight">
-            Free workout app for guests, trainees, coaches, and service admins.
+            Pushup-first challenge sessions built to be performed, saved, and shared fast.
           </h2>
           <p className="mt-4 max-w-2xl text-base text-ink/72">
-            Guests get the complete workout and card flow with zero persistence. Registered
-            users add history, coach relationships, and role-driven surfaces on top.
+            Guests get the complete challenge and result-card flow with zero persistence.
+            Registered users add saved results, coach relationships, and role-driven
+            visibility surfaces on top.
           </p>
           <div className="mt-6 grid gap-3">
             {pillars.map((item) => (
@@ -35,10 +36,10 @@ export default function HomePage() {
           </div>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
-              href="/workout"
+              href="/challenge"
               className="rounded-full bg-accent px-5 py-3 text-sm font-semibold text-canvas"
             >
-              Open workout flow
+              Open pushup challenge
             </Link>
             <Link
               href="/coaches"
@@ -65,7 +66,7 @@ export default function HomePage() {
           <div className="rounded-[2rem] border border-line bg-panel p-5">
             <p className="text-xs uppercase tracking-[0.28em] text-signal">History rule</p>
             <p className="mt-2 text-sm text-ink/75">
-              Past workouts keep the branding they had when they were created.
+              Past challenge results keep the branding they had when they were created.
             </p>
           </div>
         </div>
