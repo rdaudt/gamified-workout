@@ -1,10 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  DrawingUtils,
-  PoseLandmarker,
-} from '@mediapipe/tasks-vision'
+import type { PoseLandmarker } from '@mediapipe/tasks-vision'
 import { createResultCardBlob } from '@/lib/challenge/result-card'
 import {
   analyzePushupLandmarks,
@@ -17,6 +14,16 @@ import {
   type PosePoint,
   type PushupCounterState,
 } from '@/lib/challenge/pushup'
+import {
+  buildChallengeFrameSnapshot,
+  drawComposedChallengeFrame,
+  drawPoseOverlay,
+  getSupportedRecordingMimeType,
+  supportsVideoRecording,
+  syncCanvasSize,
+  type PoseConnection,
+  type SessionVideoStatus,
+} from '@/lib/challenge/session-video'
 import { createWorkoutAttributionSnapshot } from '@/lib/platform/branding'
 import { getExerciseById } from '@/lib/platform/exercises'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
@@ -24,10 +31,9 @@ import type { Database, Tables } from '@/lib/supabase/database.types'
 import { hasSupabasePublicEnv } from '@/lib/supabase/env'
 import type { WorkoutAttributionSnapshot } from '@/lib/types/domain'
 
-type SessionStatus = 'idle' | 'countdown' | 'live' | 'paused' | 'complete'
+type SessionStatus = SessionVideoStatus
 type CameraStatus = 'idle' | 'requesting' | 'ready' | 'error'
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'guest' | 'error'
-type PoseConnection = { start: number; end: number }
 
 interface ViewerContext {
   userId: string | null
@@ -57,8 +63,13 @@ export function PushupChallengeClient() {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const overlayRef = useRef<HTMLCanvasElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const compositionCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const compositionStreamRef = useRef<MediaStream | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordedChunksRef = useRef<Blob[]>([])
+  const recordedVideoUrlRef = useRef<string | null>(null)
+  const stopRecordingResolverRef = useRef<(() => void) | null>(null)
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null)
-  const drawingUtilsRef = useRef<DrawingUtils | null>(null)
   const poseConnectionsRef = useRef<PoseConnection[]>([])
   const animationFrameRef = useRef<number | null>(null)
   const countdownTimerRef = useRef<number | null>(null)
@@ -70,6 +81,8 @@ export function PushupChallengeClient() {
   const pausedMsRef = useRef(0)
   const sessionOccurredAtRef = useRef<string | null>(null)
   const elapsedSecondsRef = useRef(0)
+  const bodyHeightRef = useRef(1)
+  const countdownValueRef = useRef<number | null>(null)
   const viewerContextRef = useRef<ViewerContext>({
     userId: null,
     label: 'Guest challenger',
@@ -95,6 +108,8 @@ export function PushupChallengeClient() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [viewerLabel, setViewerLabel] = useState('Guest challenger')
   const [countdownValue, setCountdownValue] = useState<number | null>(null)
+  const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null)
+  const [recordingMessage, setRecordingMessage] = useState<string | null>(null)
   const [branding, setBranding] = useState<WorkoutAttributionSnapshot>(
     viewerContextRef.current.attribution
   )
@@ -188,11 +203,14 @@ export function PushupChallengeClient() {
     return () => {
       cancelled = true
       stopCountdown()
+      void stopVideoRecording({ discard: true })
       stopAnimationLoop()
       stopCameraStream()
+      clearRecordedVideo()
       poseLandmarkerRef.current?.close()
       poseLandmarkerRef.current = null
-      drawingUtilsRef.current = null
+      compositionCanvasRef.current = null
+      compositionStreamRef.current = null
     }
   }, [])
 
@@ -200,22 +218,28 @@ export function PushupChallengeClient() {
     if (sessionStatus !== 'countdown') {
       stopCountdown()
       setCountdownValue(null)
+      countdownValueRef.current = null
 
       return
     }
 
     setCountdownValue(3)
+    countdownValueRef.current = 3
     countdownTimerRef.current = window.setInterval(() => {
       setCountdownValue((currentValue) => {
         if (currentValue === null || currentValue <= 1) {
           stopCountdown()
           sessionStatusRef.current = 'live'
           setSessionStatus('live')
+          countdownValueRef.current = null
 
           return null
         }
 
-        return currentValue - 1
+        const nextValue = currentValue - 1
+        countdownValueRef.current = nextValue
+
+        return nextValue
       })
     }, 1000)
 
@@ -276,7 +300,6 @@ export function PushupChallengeClient() {
       }
 
       poseLandmarkerRef.current = poseLandmarker
-      drawingUtilsRef.current = new vision.DrawingUtils(context)
       poseConnectionsRef.current = vision.PoseLandmarker.POSE_CONNECTIONS
       setCameraStatus('ready')
       startAnimationLoop()
@@ -288,6 +311,7 @@ export function PushupChallengeClient() {
   }
 
   function startSession() {
+    clearRecordedVideo()
     counterStateRef.current = initialPushupCounterState
     challengeStartMsRef.current = null
     pauseStartedAtRef.current = null
@@ -300,8 +324,11 @@ export function PushupChallengeClient() {
     setElapsedSeconds(0)
     setTrackingScore(0)
     setBodyHeight(1)
+    bodyHeightRef.current = 1
     setSaveStatus('idle')
     setSaveMessage(null)
+    setRecordingMessage(null)
+    void startVideoRecording()
   }
 
   function pauseSession() {
@@ -338,6 +365,7 @@ export function PushupChallengeClient() {
     sessionStatusRef.current = 'complete'
     setSessionStatus('complete')
     setElapsedSeconds(durationSeconds)
+    await stopVideoRecording()
 
     const context = viewerContextRef.current
 
@@ -395,6 +423,7 @@ export function PushupChallengeClient() {
 
   function resetSession() {
     stopCountdown()
+    void stopVideoRecording({ discard: true })
     sessionStatusRef.current = 'idle'
     counterStateRef.current = initialPushupCounterState
     challengeStartMsRef.current = null
@@ -402,6 +431,7 @@ export function PushupChallengeClient() {
     pausedMsRef.current = 0
     sessionOccurredAtRef.current = null
     elapsedSecondsRef.current = 0
+    bodyHeightRef.current = 1
     setSessionStatus('idle')
     setRepCount(0)
     setElapsedSeconds(0)
@@ -410,6 +440,9 @@ export function PushupChallengeClient() {
     setSaveStatus('idle')
     setSaveMessage(null)
     setCountdownValue(null)
+    countdownValueRef.current = null
+    setRecordingMessage(null)
+    clearRecordedVideo()
   }
 
   function cancelChallenge() {
@@ -419,7 +452,6 @@ export function PushupChallengeClient() {
     lastVideoTimeRef.current = -1
     poseLandmarkerRef.current?.close()
     poseLandmarkerRef.current = null
-    drawingUtilsRef.current = null
 
     const video = videoRef.current
     const canvas = overlayRef.current
@@ -436,6 +468,164 @@ export function PushupChallengeClient() {
 
     setCameraStatus('idle')
     setCameraError(null)
+  }
+
+  async function startVideoRecording() {
+    if (!supportsVideoRecording()) {
+      setRecordingMessage('Debug video capture is not supported in this browser.')
+
+      return
+    }
+
+    if (!streamRef.current || mediaRecorderRef.current) {
+      return
+    }
+
+    try {
+      recordedChunksRef.current = []
+      const compositionCanvas = getOrCreateCompositionCanvas()
+      syncCanvasToVideo(compositionCanvas)
+      const compositionStream = compositionCanvas.captureStream(30)
+      compositionStreamRef.current = compositionStream
+      const mimeType = getSupportedRecordingMimeType()
+      const mediaRecorder = mimeType
+        ? new MediaRecorder(compositionStream, { mimeType })
+        : new MediaRecorder(compositionStream)
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data)
+        }
+      }
+
+      mediaRecorder.onstop = () => {
+        const resolver = stopRecordingResolverRef.current
+        stopRecordingResolverRef.current = null
+
+        if (recordedChunksRef.current.length > 0) {
+          const blob = new Blob(recordedChunksRef.current, {
+            type: mediaRecorder.mimeType || 'video/webm',
+          })
+          const url = URL.createObjectURL(blob)
+          updateRecordedVideoUrl(url)
+          setRecordingMessage('Session video is ready to download.')
+        } else {
+          setRecordingMessage('No session video was captured for this run.')
+        }
+
+        mediaRecorderRef.current = null
+        stopCompositionStream()
+        recordedChunksRef.current = []
+        resolver?.()
+      }
+
+      mediaRecorder.onerror = () => {
+        const resolver = stopRecordingResolverRef.current
+        stopRecordingResolverRef.current = null
+        mediaRecorderRef.current = null
+        stopCompositionStream()
+        recordedChunksRef.current = []
+        setRecordingMessage('Session video capture failed for this run.')
+        resolver?.()
+      }
+
+      mediaRecorderRef.current = mediaRecorder
+      mediaRecorder.start()
+      setRecordingMessage('Recording session video with burned-in challenge HUD.')
+    } catch {
+      stopCompositionStream()
+      setRecordingMessage('Session video capture could not be started in this browser.')
+    }
+  }
+
+  async function stopVideoRecording(options?: { discard?: boolean }) {
+    const mediaRecorder = mediaRecorderRef.current
+
+    if (!mediaRecorder) {
+      if (options?.discard) {
+        clearRecordedVideo()
+      }
+
+      return
+    }
+
+    if (options?.discard) {
+      mediaRecorder.ondataavailable = null
+      mediaRecorder.onstop = null
+      mediaRecorder.onerror = null
+      mediaRecorderRef.current = null
+      recordedChunksRef.current = []
+
+      if (mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop()
+      }
+
+      stopCompositionStream()
+      stopRecordingResolverRef.current = null
+      clearRecordedVideo()
+      setRecordingMessage(null)
+
+      return
+    }
+
+    await new Promise<void>((resolve) => {
+      stopRecordingResolverRef.current = resolve
+
+      if (mediaRecorder.state === 'inactive') {
+        resolve()
+
+        return
+      }
+
+      mediaRecorder.stop()
+    })
+  }
+
+  function updateRecordedVideoUrl(url: string | null) {
+    if (recordedVideoUrlRef.current) {
+      URL.revokeObjectURL(recordedVideoUrlRef.current)
+    }
+
+    recordedVideoUrlRef.current = url
+    setRecordedVideoUrl(url)
+  }
+
+  function clearRecordedVideo() {
+    updateRecordedVideoUrl(null)
+  }
+
+  function getOrCreateCompositionCanvas() {
+    if (!compositionCanvasRef.current) {
+      compositionCanvasRef.current = document.createElement('canvas')
+    }
+
+    return compositionCanvasRef.current
+  }
+
+  function syncCanvasToVideo(canvas: HTMLCanvasElement) {
+    const video = videoRef.current
+
+    if (!video) {
+      return
+    }
+
+    syncCanvasSize(canvas, video)
+  }
+
+  function stopCompositionStream() {
+    compositionStreamRef.current?.getTracks().forEach((track) => track.stop())
+    compositionStreamRef.current = null
+  }
+
+  function downloadSessionVideo() {
+    if (!recordedVideoUrl) {
+      return
+    }
+
+    const anchor = document.createElement('a')
+    anchor.href = recordedVideoUrl
+    anchor.download = 'beat-past-you-session-video.webm'
+    anchor.click()
   }
 
   async function shareResult() {
@@ -496,10 +686,10 @@ export function PushupChallengeClient() {
     const loop = () => {
       const video = videoRef.current
       const canvas = overlayRef.current
+      const compositionCanvas = compositionCanvasRef.current
       const poseLandmarker = poseLandmarkerRef.current
-      const drawingUtils = drawingUtilsRef.current
 
-      if (!video || !canvas || !poseLandmarker || !drawingUtils) {
+      if (!video || !canvas || !poseLandmarker) {
         animationFrameRef.current = requestAnimationFrame(loop)
         return
       }
@@ -515,26 +705,25 @@ export function PushupChallengeClient() {
       context.clearRect(0, 0, canvas.width, canvas.height)
 
       const now = performance.now()
+      let latestLandmarks: PosePoint[] | null = null
+      let latestAnalysis: ReturnType<typeof analyzePushupLandmarks> | null = null
       if (video.readyState >= 2 && video.currentTime !== lastVideoTimeRef.current) {
         lastVideoTimeRef.current = video.currentTime
         const result = poseLandmarker.detectForVideo(video, now)
         const landmarks = result.landmarks[0]
 
         if (landmarks) {
-          drawingUtils.drawConnectors(landmarks, poseConnectionsRef.current, {
-            color: '#ff6b68',
-            lineWidth: 4,
-          })
-          drawingUtils.drawLandmarks(landmarks, {
-            color: '#ffd1b0',
-            radius: 3,
-          })
+          latestLandmarks = landmarks as PosePoint[]
+          drawPoseOverlay(context, canvas, latestLandmarks, poseConnectionsRef.current)
 
-          const analysis = analyzePushupLandmarks(landmarks as PosePoint[])
+          const analysis = analyzePushupLandmarks(latestLandmarks)
 
           if (analysis) {
+            latestAnalysis = analysis
             const nextAnalysis = analysis
-            setBodyHeight((current) => current * 0.7 + nextAnalysis.bodyHeight * 0.3)
+            const nextBodyHeight = bodyHeightRef.current * 0.7 + nextAnalysis.bodyHeight * 0.3
+            bodyHeightRef.current = nextBodyHeight
+            setBodyHeight(nextBodyHeight)
 
             if (sessionStatusRef.current === 'live') {
               const update = updatePushupCounter(
@@ -562,6 +751,31 @@ export function PushupChallengeClient() {
               }
             }
           }
+        }
+      }
+
+      if (compositionCanvas) {
+        syncCanvasSize(compositionCanvas, video)
+        const compositionContext = compositionCanvas.getContext('2d')
+
+        if (compositionContext) {
+          const snapshot = buildChallengeFrameSnapshot({
+            status: sessionStatusRef.current,
+            countdownValue: countdownValueRef.current,
+            repCount: counterStateRef.current.reps,
+            elapsedSeconds: elapsedSecondsRef.current || elapsedSeconds,
+            trackingScore: Math.round(calculateTrackingScore(counterStateRef.current)),
+            bodyHeight: latestAnalysis?.bodyHeight ?? bodyHeightRef.current,
+          })
+
+          drawComposedChallengeFrame({
+            canvas: compositionCanvas,
+            context: compositionContext,
+            video,
+            snapshot,
+            landmarks: latestLandmarks,
+            connections: poseConnectionsRef.current,
+          })
         }
       }
 
@@ -845,6 +1059,13 @@ export function PushupChallengeClient() {
             >
               Download
             </button>
+            <button
+              onClick={downloadSessionVideo}
+              disabled={sessionStatus !== 'complete' || !recordedVideoUrl}
+              className="rounded-full border border-line px-4 py-2 text-sm text-ink/75 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Download session video
+            </button>
           </div>
 
           <p className="mt-3 text-sm text-ink/68">
@@ -860,6 +1081,10 @@ export function PushupChallengeClient() {
             >
               {saveMessage}
             </p>
+          ) : null}
+
+          {recordingMessage ? (
+            <p className="mt-3 text-sm text-ink/68">{recordingMessage}</p>
           ) : null}
         </article>
       </section>
@@ -883,15 +1108,4 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       <p className="mt-3 font-display text-3xl text-ink">{value}</p>
     </div>
   )
-}
-
-function syncCanvasSize(canvas: HTMLCanvasElement, video: HTMLVideoElement) {
-  if (!video.videoWidth || !video.videoHeight) {
-    return
-  }
-
-  if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-  }
 }
