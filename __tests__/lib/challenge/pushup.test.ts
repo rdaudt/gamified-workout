@@ -2,83 +2,140 @@ import {
   analyzePushupLandmarks,
   calculateEffortScore,
   calculateTrackingScore,
+  defaultPushupThresholds,
   formatDuration,
   initialPushupCounterState,
   updatePushupCounter,
 } from '@/lib/challenge/pushup'
 
-function createLandmarks(leftElbowAngle: number, rightElbowAngle = leftElbowAngle) {
-  const angleToPoint = (angle: number) => {
-    const radians = (angle * Math.PI) / 180
-
-    return {
-      x: Math.cos(radians),
-      y: Math.sin(radians),
-      visibility: 0.95,
-    }
-  }
-
-  const leftShoulder = { x: -1, y: 0, visibility: 0.95 }
-  const leftElbow = { x: 0, y: 0, visibility: 0.95 }
-  const leftWrist = angleToPoint(leftElbowAngle)
-  const rightShoulder = { x: 1, y: 0, visibility: 0.95 }
-  const rightElbow = { x: 2, y: 0, visibility: 0.95 }
-  const rightPoint = angleToPoint(180 - rightElbowAngle)
-  const rightWrist = {
-    x: rightElbow.x + rightPoint.x,
-    y: rightElbow.y + rightPoint.y,
+function createBlankLandmarks() {
+  return Array.from({ length: 33 }, () => ({
+    x: 0.5,
+    y: 0.5,
     visibility: 0.95,
-  }
+  }))
+}
 
-  return [
-    { x: 0.5, y: -1, visibility: 0.95 },
-    ...Array.from({ length: 10 }, () => ({ x: 0, y: 0, visibility: 0.95 })),
-    leftShoulder,
-    rightShoulder,
-    leftElbow,
-    rightElbow,
-    leftWrist,
-    rightWrist,
-  ]
+function createPushupPose() {
+  const landmarks = createBlankLandmarks()
+
+  landmarks[0] = { x: 0.32, y: 0.28, visibility: 0.95 }
+  landmarks[11] = { x: 0.28, y: 0.32, visibility: 0.95 }
+  landmarks[12] = { x: 0.38, y: 0.32, visibility: 0.95 }
+  landmarks[13] = { x: 0.24, y: 0.45, visibility: 0.95 }
+  landmarks[14] = { x: 0.42, y: 0.45, visibility: 0.95 }
+  landmarks[15] = { x: 0.18, y: 0.7, visibility: 0.95 }
+  landmarks[16] = { x: 0.48, y: 0.7, visibility: 0.95 }
+  landmarks[23] = { x: 0.5, y: 0.35, visibility: 0.95 }
+  landmarks[24] = { x: 0.58, y: 0.35, visibility: 0.95 }
+  landmarks[25] = { x: 0.72, y: 0.37, visibility: 0.95 }
+  landmarks[26] = { x: 0.78, y: 0.37, visibility: 0.95 }
+  landmarks[27] = { x: 0.9, y: 0.39, visibility: 0.95 }
+  landmarks[28] = { x: 0.96, y: 0.39, visibility: 0.95 }
+
+  return landmarks
+}
+
+function createStandingPose() {
+  const landmarks = createBlankLandmarks()
+
+  landmarks[0] = { x: 0.5, y: 0.12, visibility: 0.95 }
+  landmarks[11] = { x: 0.42, y: 0.22, visibility: 0.95 }
+  landmarks[12] = { x: 0.58, y: 0.22, visibility: 0.95 }
+  landmarks[13] = { x: 0.4, y: 0.34, visibility: 0.95 }
+  landmarks[14] = { x: 0.6, y: 0.34, visibility: 0.95 }
+  landmarks[15] = { x: 0.38, y: 0.48, visibility: 0.95 }
+  landmarks[16] = { x: 0.62, y: 0.48, visibility: 0.95 }
+  landmarks[23] = { x: 0.45, y: 0.5, visibility: 0.95 }
+  landmarks[24] = { x: 0.55, y: 0.5, visibility: 0.95 }
+  landmarks[25] = { x: 0.46, y: 0.7, visibility: 0.95 }
+  landmarks[26] = { x: 0.54, y: 0.7, visibility: 0.95 }
+  landmarks[27] = { x: 0.47, y: 0.92, visibility: 0.95 }
+  landmarks[28] = { x: 0.53, y: 0.92, visibility: 0.95 }
+
+  return landmarks
 }
 
 describe('pushup challenge helpers', () => {
-  it('analyzes pose landmarks into depth and confidence signals', () => {
-    const analysis = analyzePushupLandmarks(createLandmarks(95))
+  it('recognizes a stable pushup posture and rejects upright walking posture', () => {
+    const pushupAnalysis = analyzePushupLandmarks(createPushupPose())
+    const standingAnalysis = analyzePushupLandmarks(createStandingPose())
 
-    expect(analysis).toEqual(
+    expect(pushupAnalysis).toEqual(
       expect.objectContaining({
         isConfident: true,
-        trackingConfidence: expect.any(Number),
+        isPushupReady: true,
       })
     )
-    expect(analysis?.averageElbowAngle).toBeGreaterThanOrEqual(90)
-    expect(analysis?.averageElbowAngle).toBeLessThanOrEqual(100)
-    expect(analysis?.bodyHeight).toBeGreaterThanOrEqual(0)
-    expect(analysis?.bodyHeight).toBeLessThanOrEqual(1)
+    expect(pushupAnalysis?.postureConfidence).toBeGreaterThan(
+      defaultPushupThresholds.minimumPostureConfidence
+    )
+    expect(standingAnalysis).toEqual(
+      expect.objectContaining({
+        isConfident: true,
+        isPushupReady: false,
+      })
+    )
+    expect(standingAnalysis?.postureConfidence).toBeLessThan(
+      defaultPushupThresholds.minimumPostureConfidence
+    )
   })
 
-  it('increments a rep only after a down and lockout cycle', () => {
+  it('requires a stable ready posture before a rep can increment', () => {
     const down = {
       averageElbowAngle: 92,
       bodyHeight: 0.05,
       trackingConfidence: 0.95,
+      postureConfidence: 0.9,
       isConfident: true,
+      isPushupReady: true,
     }
     const up = {
       averageElbowAngle: 170,
       bodyHeight: 1,
       trackingConfidence: 0.95,
+      postureConfidence: 0.9,
       isConfident: true,
+      isPushupReady: true,
     }
 
-    const afterDown = updatePushupCounter(initialPushupCounterState, down)
+    let state = initialPushupCounterState
+
+    for (let index = 0; index < defaultPushupThresholds.minimumReadyFrames - 1; index += 1) {
+      const update = updatePushupCounter(state, up)
+      state = update.nextState
+      expect(update.incremented).toBe(false)
+    }
+
+    const afterDown = updatePushupCounter(state, down)
     const afterUp = updatePushupCounter(afterDown.nextState, up)
 
     expect(afterDown.incremented).toBe(false)
     expect(afterDown.nextState.phase).toBe('down')
     expect(afterUp.incremented).toBe(true)
     expect(afterUp.nextState.reps).toBe(1)
+  })
+
+  it('drops back to ready when posture becomes invalid', () => {
+    const readyState = {
+      ...initialPushupCounterState,
+      phase: 'down' as const,
+      eligibleFrames: defaultPushupThresholds.minimumReadyFrames,
+    }
+    const invalidFrame = {
+      averageElbowAngle: 120,
+      bodyHeight: 0.4,
+      trackingConfidence: 0.95,
+      postureConfidence: 0.25,
+      isConfident: true,
+      isPushupReady: false,
+    }
+
+    const update = updatePushupCounter(readyState, invalidFrame)
+
+    expect(update.incremented).toBe(false)
+    expect(update.nextState.phase).toBe('ready')
+    expect(update.nextState.eligibleFrames).toBe(0)
   })
 
   it('reports tracking and effort metrics in bounded form', () => {

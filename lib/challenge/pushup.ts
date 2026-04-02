@@ -8,7 +8,9 @@ export interface PushupFrameAnalysis {
   averageElbowAngle: number
   bodyHeight: number
   trackingConfidence: number
+  postureConfidence: number
   isConfident: boolean
+  isPushupReady: boolean
 }
 
 export interface PushupCounterState {
@@ -17,12 +19,15 @@ export interface PushupCounterState {
   totalFrames: number
   confidentFrames: number
   latestBodyHeight: number
+  eligibleFrames: number
 }
 
 export interface PushupThresholds {
   downAngle: number
   upAngle: number
   minimumConfidence: number
+  minimumPostureConfidence: number
+  minimumReadyFrames: number
 }
 
 export interface PushupCounterUpdate {
@@ -34,6 +39,8 @@ export const defaultPushupThresholds: PushupThresholds = {
   downAngle: 100,
   upAngle: 155,
   minimumConfidence: 0.45,
+  minimumPostureConfidence: 0.54,
+  minimumReadyFrames: 6,
 }
 
 export const poseIndexes = {
@@ -44,6 +51,12 @@ export const poseIndexes = {
   rightElbow: 14,
   leftWrist: 15,
   rightWrist: 16,
+  leftHip: 23,
+  rightHip: 24,
+  leftKnee: 25,
+  rightKnee: 26,
+  leftAnkle: 27,
+  rightAnkle: 28,
 } as const
 
 export const initialPushupCounterState: PushupCounterState = {
@@ -52,6 +65,7 @@ export const initialPushupCounterState: PushupCounterState = {
   totalFrames: 0,
   confidentFrames: 0,
   latestBodyHeight: 1,
+  eligibleFrames: 0,
 }
 
 export function calculateAngle(a: PosePoint, b: PosePoint, c: PosePoint): number {
@@ -66,33 +80,126 @@ function average(values: number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length
 }
 
+function midpoint(a: PosePoint, b: PosePoint): PosePoint {
+  return {
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+    visibility: average([(a.visibility ?? 1), (b.visibility ?? 1)]),
+  }
+}
+
+function distance(a: PosePoint, b: PosePoint): number {
+  return Math.hypot(a.x - b.x, a.y - b.y)
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function normalizeScore(value: number, min: number, max: number) {
+  if (max <= min) {
+    return value >= max ? 1 : 0
+  }
+
+  return clamp((value - min) / (max - min), 0, 1)
+}
+
 export function analyzePushupLandmarks(landmarks: PosePoint[]): PushupFrameAnalysis | null {
-  const points = [
-    landmarks[poseIndexes.leftShoulder],
-    landmarks[poseIndexes.leftElbow],
-    landmarks[poseIndexes.leftWrist],
-    landmarks[poseIndexes.rightShoulder],
-    landmarks[poseIndexes.rightElbow],
-    landmarks[poseIndexes.rightWrist],
-    landmarks[poseIndexes.nose],
+  const leftShoulder = landmarks[poseIndexes.leftShoulder]
+  const rightShoulder = landmarks[poseIndexes.rightShoulder]
+  const leftElbow = landmarks[poseIndexes.leftElbow]
+  const rightElbow = landmarks[poseIndexes.rightElbow]
+  const leftWrist = landmarks[poseIndexes.leftWrist]
+  const rightWrist = landmarks[poseIndexes.rightWrist]
+  const leftHip = landmarks[poseIndexes.leftHip]
+  const rightHip = landmarks[poseIndexes.rightHip]
+  const leftKnee = landmarks[poseIndexes.leftKnee]
+  const rightKnee = landmarks[poseIndexes.rightKnee]
+  const leftAnkle = landmarks[poseIndexes.leftAnkle]
+  const rightAnkle = landmarks[poseIndexes.rightAnkle]
+  const nose = landmarks[poseIndexes.nose]
+
+  const requiredPoints = [
+    leftShoulder,
+    rightShoulder,
+    leftElbow,
+    rightElbow,
+    leftWrist,
+    rightWrist,
+    leftHip,
+    rightHip,
+    nose,
   ]
 
-  if (points.some((point) => !point)) {
+  if (requiredPoints.some((point) => !point)) {
     return null
   }
 
-  const confidenceValues = points.map((point) => point.visibility ?? 1)
+  const lowerLeftPoint = leftAnkle ?? leftKnee
+  const lowerRightPoint = rightAnkle ?? rightKnee
+
+  if (!lowerLeftPoint || !lowerRightPoint) {
+    return null
+  }
+
+  const confidenceValues = [
+    ...requiredPoints,
+    lowerLeftPoint,
+    lowerRightPoint,
+  ].map((point) => point.visibility ?? 1)
   const trackingConfidence = average(confidenceValues)
-  const leftAngle = calculateAngle(points[0], points[1], points[2])
-  const rightAngle = calculateAngle(points[3], points[4], points[5])
+  const leftAngle = calculateAngle(leftShoulder, leftElbow, leftWrist)
+  const rightAngle = calculateAngle(rightShoulder, rightElbow, rightWrist)
   const averageElbowAngle = average([leftAngle, rightAngle])
   const bodyHeight = clamp((averageElbowAngle - 90) / 80, 0, 1)
+  const shoulderMid = midpoint(leftShoulder, rightShoulder)
+  const hipMid = midpoint(leftHip, rightHip)
+  const lowerMid = midpoint(lowerLeftPoint, lowerRightPoint)
+  const wristMid = midpoint(leftWrist, rightWrist)
+  const elbowMid = midpoint(leftElbow, rightElbow)
+  const torsoLength = distance(shoulderMid, hipMid)
+  const lowerBodyLength = distance(hipMid, lowerMid)
+  const bodySpan = Math.max(distance(shoulderMid, lowerMid), torsoLength + lowerBodyLength, 0.001)
+  const torsoVerticalRatio = Math.abs(hipMid.y - shoulderMid.y) / Math.max(torsoLength, 0.001)
+  const lowerBodyVerticalRatio = Math.abs(lowerMid.y - hipMid.y) / Math.max(lowerBodyLength, 0.001)
+  const torsoHorizontalScore = 1 - normalizeScore(torsoVerticalRatio, 0.28, 0.75)
+  const lowerBodyHorizontalScore = 1 - normalizeScore(lowerBodyVerticalRatio, 0.3, 0.82)
+  const handPlacementScore = normalizeScore(wristMid.y - shoulderMid.y, 0.08, 0.3)
+  const elbowPlacementScore = normalizeScore(elbowMid.y - shoulderMid.y, 0.02, 0.18)
+  const shoulderCoverageScore = normalizeScore(distance(leftShoulder, rightShoulder), 0.12, 0.3)
+  const headNearShouldersScore =
+    1 - normalizeScore(Math.abs(nose.y - shoulderMid.y), 0.08, 0.35)
+  const postureConfidence = clamp(
+    average([
+      torsoHorizontalScore,
+      lowerBodyHorizontalScore,
+      handPlacementScore,
+      elbowPlacementScore,
+      shoulderCoverageScore,
+      headNearShouldersScore,
+    ]),
+    0,
+    1
+  )
+  const hasPushupShape =
+    torsoVerticalRatio <= 0.58 &&
+    lowerBodyVerticalRatio <= 0.68 &&
+    wristMid.y - shoulderMid.y >= 0.08 &&
+    elbowMid.y - shoulderMid.y >= 0.02
+  const isConfident = trackingConfidence >= defaultPushupThresholds.minimumConfidence
+  const isPushupReady =
+    isConfident &&
+    hasPushupShape &&
+    postureConfidence >= defaultPushupThresholds.minimumPostureConfidence &&
+    bodySpan >= 0.22
 
   return {
     averageElbowAngle,
     bodyHeight,
     trackingConfidence,
-    isConfident: trackingConfidence >= defaultPushupThresholds.minimumConfidence,
+    postureConfidence,
+    isConfident,
+    isPushupReady,
   }
 }
 
@@ -106,9 +213,25 @@ export function updatePushupCounter(
     totalFrames: state.totalFrames + 1,
     confidentFrames: state.confidentFrames + (analysis.isConfident ? 1 : 0),
     latestBodyHeight: analysis.bodyHeight,
+    eligibleFrames: analysis.isPushupReady ? state.eligibleFrames + 1 : 0,
   }
 
-  if (!analysis.isConfident || analysis.trackingConfidence < thresholds.minimumConfidence) {
+  if (
+    !analysis.isConfident ||
+    analysis.trackingConfidence < thresholds.minimumConfidence ||
+    !analysis.isPushupReady
+  ) {
+    nextState.phase = 'ready'
+
+    return {
+      nextState,
+      incremented: false,
+    }
+  }
+
+  if (nextState.eligibleFrames < thresholds.minimumReadyFrames) {
+    nextState.phase = 'ready'
+
     return {
       nextState,
       incremented: false,
@@ -167,8 +290,4 @@ export function formatDuration(durationSeconds: number): string {
   const seconds = durationSeconds % 60
 
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
 }

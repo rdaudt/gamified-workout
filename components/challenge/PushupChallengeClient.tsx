@@ -515,8 +515,6 @@ export function PushupChallengeClient() {
       context.clearRect(0, 0, canvas.width, canvas.height)
 
       const now = performance.now()
-      let analysis: ReturnType<typeof analyzePushupLandmarks> | null = null
-
       if (video.readyState >= 2 && video.currentTime !== lastVideoTimeRef.current) {
         lastVideoTimeRef.current = video.currentTime
         const result = poseLandmarker.detectForVideo(video, now)
@@ -532,7 +530,7 @@ export function PushupChallengeClient() {
             radius: 3,
           })
 
-          analysis = analyzePushupLandmarks(landmarks as PosePoint[])
+          const analysis = analyzePushupLandmarks(landmarks as PosePoint[])
 
           if (analysis) {
             const nextAnalysis = analysis
@@ -550,6 +548,15 @@ export function PushupChallengeClient() {
                 Math.round(calculateTrackingScore(counterStateRef.current))
               )
 
+              if (
+                challengeStartMsRef.current === null &&
+                update.nextState.eligibleFrames >= defaultPushupThresholds.minimumReadyFrames &&
+                nextAnalysis.averageElbowAngle <= defaultPushupThresholds.downAngle
+              ) {
+                challengeStartMsRef.current = performance.now()
+                sessionOccurredAtRef.current = new Date().toISOString()
+              }
+
               if (update.incremented) {
                 setRepCount(update.nextState.reps)
               }
@@ -559,15 +566,6 @@ export function PushupChallengeClient() {
       }
 
       if (sessionStatusRef.current === 'live') {
-        if (
-          challengeStartMsRef.current === null &&
-          analysis?.isConfident &&
-          analysis.averageElbowAngle <= defaultPushupThresholds.downAngle
-        ) {
-          challengeStartMsRef.current = performance.now()
-          sessionOccurredAtRef.current = new Date().toISOString()
-        }
-
         if (challengeStartMsRef.current !== null) {
           const nextElapsedSeconds = computeElapsedSeconds()
 
