@@ -18,10 +18,11 @@ import {
   buildChallengeFrameSnapshot,
   drawComposedChallengeFrame,
   drawPoseOverlay,
-  getSupportedRecordingMimeType,
+  getPreferredRecordingFormat,
   supportsVideoRecording,
   syncCanvasSize,
   type PoseConnection,
+  type RecordingFormat,
   type SessionVideoStatus,
 } from '@/lib/challenge/session-video'
 import { createWorkoutAttributionSnapshot } from '@/lib/platform/branding'
@@ -68,6 +69,7 @@ export function PushupChallengeClient() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const recordedVideoUrlRef = useRef<string | null>(null)
+  const recordingFormatRef = useRef<RecordingFormat | null>(null)
   const stopRecordingResolverRef = useRef<(() => void) | null>(null)
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null)
   const poseConnectionsRef = useRef<PoseConnection[]>([])
@@ -109,6 +111,7 @@ export function PushupChallengeClient() {
   const [viewerLabel, setViewerLabel] = useState('Guest challenger')
   const [countdownValue, setCountdownValue] = useState<number | null>(null)
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null)
+  const [recordingFormatLabel, setRecordingFormatLabel] = useState<'MP4' | 'WebM'>('MP4')
   const [recordingMessage, setRecordingMessage] = useState<string | null>(null)
   const [branding, setBranding] = useState<WorkoutAttributionSnapshot>(
     viewerContextRef.current.attribution
@@ -211,6 +214,7 @@ export function PushupChallengeClient() {
       poseLandmarkerRef.current = null
       compositionCanvasRef.current = null
       compositionStreamRef.current = null
+      recordingFormatRef.current = null
     }
   }, [])
 
@@ -442,6 +446,7 @@ export function PushupChallengeClient() {
     setCountdownValue(null)
     countdownValueRef.current = null
     setRecordingMessage(null)
+    setRecordingFormatLabel('MP4')
     clearRecordedVideo()
   }
 
@@ -487,10 +492,18 @@ export function PushupChallengeClient() {
       syncCanvasToVideo(compositionCanvas)
       const compositionStream = compositionCanvas.captureStream(30)
       compositionStreamRef.current = compositionStream
-      const mimeType = getSupportedRecordingMimeType()
-      const mediaRecorder = mimeType
-        ? new MediaRecorder(compositionStream, { mimeType })
-        : new MediaRecorder(compositionStream)
+      const recordingFormat = getPreferredRecordingFormat()
+
+      if (!recordingFormat) {
+        throw new Error('No supported recording format was found.')
+      }
+
+      recordingFormatRef.current = recordingFormat
+      setRecordingFormatLabel(recordingFormat.label)
+
+      const mediaRecorder = new MediaRecorder(compositionStream, {
+        mimeType: recordingFormat.mimeType,
+      })
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -504,17 +517,22 @@ export function PushupChallengeClient() {
 
         if (recordedChunksRef.current.length > 0) {
           const blob = new Blob(recordedChunksRef.current, {
-            type: mediaRecorder.mimeType || 'video/webm',
+            type: mediaRecorder.mimeType || recordingFormat.mimeType,
           })
           const url = URL.createObjectURL(blob)
           updateRecordedVideoUrl(url)
-          setRecordingMessage('Session video is ready to download.')
+          setRecordingMessage(
+            recordingFormat.isIPhoneFriendly
+              ? 'Session video is ready to download as MP4.'
+              : 'Session video is ready to download, but this browser only supports WebM export.'
+          )
         } else {
           setRecordingMessage('No session video was captured for this run.')
         }
 
         mediaRecorderRef.current = null
         stopCompositionStream()
+        recordingFormatRef.current = null
         recordedChunksRef.current = []
         resolver?.()
       }
@@ -524,6 +542,7 @@ export function PushupChallengeClient() {
         stopRecordingResolverRef.current = null
         mediaRecorderRef.current = null
         stopCompositionStream()
+        recordingFormatRef.current = null
         recordedChunksRef.current = []
         setRecordingMessage('Session video capture failed for this run.')
         resolver?.()
@@ -531,9 +550,14 @@ export function PushupChallengeClient() {
 
       mediaRecorderRef.current = mediaRecorder
       mediaRecorder.start()
-      setRecordingMessage('Recording session video with burned-in challenge HUD.')
+      setRecordingMessage(
+        recordingFormat.isIPhoneFriendly
+          ? 'Recording session video with burned-in challenge HUD as MP4.'
+          : 'Recording session video with burned-in challenge HUD as WebM.'
+      )
     } catch {
       stopCompositionStream()
+      recordingFormatRef.current = null
       setRecordingMessage('Session video capture could not be started in this browser.')
     }
   }
@@ -561,6 +585,7 @@ export function PushupChallengeClient() {
       }
 
       stopCompositionStream()
+      recordingFormatRef.current = null
       stopRecordingResolverRef.current = null
       clearRecordedVideo()
       setRecordingMessage(null)
@@ -624,7 +649,10 @@ export function PushupChallengeClient() {
 
     const anchor = document.createElement('a')
     anchor.href = recordedVideoUrl
-    anchor.download = 'beat-past-you-session-video.webm'
+    anchor.download = `beat-past-you-session-video.${
+      recordingFormatRef.current?.extension ??
+      (recordingFormatLabel === 'MP4' ? 'mp4' : 'webm')
+    }`
     anchor.click()
   }
 
@@ -1064,7 +1092,7 @@ export function PushupChallengeClient() {
               disabled={sessionStatus !== 'complete' || !recordedVideoUrl}
               className="rounded-full border border-line px-4 py-2 text-sm text-ink/75 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Download session video
+              {`Download session video (${recordingFormatLabel})`}
             </button>
           </div>
 
