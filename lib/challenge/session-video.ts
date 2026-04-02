@@ -16,6 +16,13 @@ export interface ChallengeFrameSnapshot {
   bodyHeight: number
 }
 
+export interface RecordingFormat {
+  extension: 'mp4' | 'webm'
+  isIPhoneFriendly: boolean
+  label: 'MP4' | 'WebM'
+  mimeType: string
+}
+
 interface BuildChallengeFrameSnapshotOptions {
   status: SessionVideoStatus
   countdownValue: number | null
@@ -169,18 +176,53 @@ export function supportsVideoRecording() {
   return typeof window !== 'undefined' && typeof window.MediaRecorder !== 'undefined'
 }
 
-export function getSupportedRecordingMimeType() {
-  if (!supportsVideoRecording()) {
+export function getPreferredRecordingFormat(
+  isTypeSupported?: (mimeType: string) => boolean
+): RecordingFormat | null {
+  const checker =
+    isTypeSupported ??
+    (supportsVideoRecording()
+      ? (mimeType: string) => MediaRecorder.isTypeSupported(mimeType)
+      : null)
+
+  if (!checker) {
     return null
   }
 
-  const candidates = [
-    'video/webm;codecs=vp9',
-    'video/webm;codecs=vp8',
-    'video/webm',
+  const candidates: RecordingFormat[] = [
+    {
+      mimeType: 'video/mp4;codecs=avc1.42E01E',
+      extension: 'mp4',
+      isIPhoneFriendly: true,
+      label: 'MP4',
+    },
+    {
+      mimeType: 'video/mp4',
+      extension: 'mp4',
+      isIPhoneFriendly: true,
+      label: 'MP4',
+    },
+    {
+      mimeType: 'video/webm;codecs=vp9',
+      extension: 'webm',
+      isIPhoneFriendly: false,
+      label: 'WebM',
+    },
+    {
+      mimeType: 'video/webm;codecs=vp8',
+      extension: 'webm',
+      isIPhoneFriendly: false,
+      label: 'WebM',
+    },
+    {
+      mimeType: 'video/webm',
+      extension: 'webm',
+      isIPhoneFriendly: false,
+      label: 'WebM',
+    },
   ]
 
-  return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? null
+  return candidates.find((candidate) => checker(candidate.mimeType)) ?? null
 }
 
 function drawFrameGradients(
