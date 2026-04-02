@@ -1,197 +1,138 @@
-# Beat Past You - Product Design Spec
+# Beat Past You - Design Spec
 
-**Date:** 2026-04-01  
+**Date:** 2026-04-02  
 **Working title:** Beat Past You  
-**Status:** Challenge-first MVP  
+**Status:** Active MVP UX spec  
 **Primary platform:** Mobile web
 
-## 1. Product Definition
+## 1. Design Intent
 
-Beat Past You is a social fitness challenge platform built around self-improvement, visibility, and shareability. The product is not a generic workout tracker. The first production experience is a pushup challenge session designed to be performed on a phone, reviewed instantly, and shared externally.
+The product should feel like a focused challenge experience, not a generic tracker dashboard. The live session needs to communicate three things clearly:
 
-Primary audiences:
+- the app is actually seeing the body
+- the rep count is grounded in visible motion
+- the result is worth sharing
 
-- guests who want to try the challenge flow immediately
-- registered challengers who want saved history and coach attachment
-- coaches who want visibility, discovery, and branded challenge attribution
-- admins who approve coaches and keep the platform operable
+The visual and interaction design should prioritize confidence, immediacy, and shareability on a phone.
 
-## 2. Core Product Shape
+## 2. Primary Live Session Flow
 
-The first enabled activity is pushups, but the product should model exercises generically so pullups, burpees, and other movements can be added later without rethinking the data model.
+1. user opens the pushup challenge on a phone
+2. user enables the front camera
+3. user props the phone low in front of them
+4. user taps `Get ready`
+5. a short countdown appears
+6. the session enters live mode
+7. elapsed time starts only when the first valid pushup movement is detected
+8. the user sees live overlay, rep count, elapsed time, tracking status, and side elevator
+9. user pauses, resumes, stops, or cancels as needed
+10. when finished, the app shows result and export actions
 
-Core v1 flow:
+The top HUD bar from the original reference remains out of scope.
 
-1. user opens the app on a phone
-2. user sets the phone low in front of them
-3. front camera preview opens in portrait orientation
-4. user starts the pushup challenge manually
-5. the app shows pose overlay, live rep count, and a side elevator that reflects body height
-6. user stops manually
-7. the app shows a shareable result card
-8. the user shares through the mobile native share sheet
+## 3. Camera and Framing
 
-The top HUD bar shown in the visual reference is out of scope for v1.
+- portrait orientation is required for the first live experience
+- front camera is the default capture mode
+- the phone should be placed low and facing the user from the front
+- the framing should favor full-body visibility during a pushup plank
+- setup guidance should encourage enough distance for the full motion to remain visible
 
-## 3. Roles and Identity
+## 4. Live Challenge Surface
 
-Beat Past You uses one account per person. Roles are additive, not exclusive.
+The live session surface should include:
 
-- a user may be a challenger
-- a user may apply to become a coach
-- a user may be promoted to admin
-- the same account may hold multiple roles
+- camera preview as the primary visual layer
+- pose skeleton overlay aligned to the athlete
+- a visible rep counter
+- an elapsed-time display
+- a tracking indicator
+- a side elevator that reflects vertical body movement
+- controls for readiness, pause, resume, stop, and cancel
 
-MVP authentication remains email and password. Social auth is deferred.
+The screen should feel usable while the phone is on the floor and viewed from a short distance.
 
-## 4. Guest vs Registered Behavior
+## 5. Timing and Counting Behavior
 
-Guests can:
+- `Get ready` begins the pre-session state, not the measured effort
+- a visible countdown bridges setup and live mode
+- elapsed time must begin only on first valid movement so setup time is excluded
+- rep counting uses tunable heuristics based on pushup posture, depth, and lockout
+- the UI should make it obvious whether the system is tracking correctly
 
-- run the full pushup challenge
-- see live pose overlay and rep counting
-- view the result card
-- share through the system share sheet
-- download the card
+## 6. Result Experience
 
-Guests do not persist:
+After the session ends, the user should get a compact result experience that emphasizes:
 
-- challenge history
-- cards
-- profile data
-- coach relationships
-
-Registered challengers can:
-
-- persist challenge history
-- persist account and profile data
-- attach or remove a coach
-- keep result history with frozen branding snapshots
-
-## 5. Coach Relationship Model
-
-A challenger may have zero or one current coach in MVP.
-
-Relationship rules:
-
-- coach attachment is optional
-- a coach can be attached from the public directory or by invite later
-- removing or replacing a coach affects future sessions only
-- manual coach selection per session is out of scope
-- past saved sessions keep their original coach or app attribution
-
-## 6. Coach Visibility
-
-Coach visibility is a core product goal.
-
-Approved coaches should have:
-
-- a public directory entry
-- a dedicated public coach page
-- business details rendered on that public page
-
-Directory rules:
-
-- approval and directory visibility are separate states
-- a coach can be approved but hidden
-- only approved, visible coaches appear publicly
-
-Ordinary users do not have public profiles in this phase.
-
-Teams and gym entities are explicitly out of scope for the current implementation slices.
-
-## 7. Challenge Session Design
-
-The first live session is portrait-only and front-camera-first.
-
-Required live elements:
-
-- camera preview
-- pose skeleton overlay
-- live rep counter
-- elapsed time
-- side elevator showing body height
-- manual controls for start, pause, resume, and stop
-
-Rep counting should use basic depth and lockout thresholds with tunable heuristics. It does not need advanced form-gating in v1.
-
-Persisted session data must include at least:
-
-- exercise
-- occurred timestamp
-- elapsed time
 - rep count
-- attribution snapshot
+- elapsed time
+- branding attribution
+- quick export options
 
-## 8. Sharing
+The first result artifact remains the shareable result card image.
 
-Sharing is as important as performing for the intended audience.
+## 7. Session Video Export
 
-V1 sharing behavior:
+The app supports a downloadable session video that burns in the live challenge presentation.
 
-- generate a mobile-first result card image
-- primary action opens the mobile native share sheet
-- keep Download as a fallback
+The exported video should include:
 
-Explicitly out of scope for v1:
-
-- direct Instagram posting
-- Instagram Stories API work
-- in-app feed mechanics
-- video export
-- captions over the result card
-
-## 9. Branding and Attribution
-
-Branding is frozen per saved result.
-
-If a current coach exists, saved results may use coach branding. If no current coach exists, results use app branding.
-
-Each saved session must retain enough attribution data to preserve the original state even if the user's coach changes later.
-
-## 10. Privacy
-
-The app does not store:
-
-- video
 - camera feed
-- raw pose landmarks
-- audio
+- pose overlay
+- countdown
+- rep count
+- elapsed time
+- tracking status
+- side elevator
 
-Only saved result metrics and attribution metadata persist for registered users.
+The export should represent the challenge itself, not the surrounding page chrome or result screen.
 
-## 11. MVP Scope
+Export behavior:
 
-In scope:
+- recording begins at `Get ready`
+- recording stops when the challenge stops or finishes
+- cancel and reset discard the current recording
+- export stays local in-browser only
+- prefer MP4 when the browser supports it, with WebM fallback
 
-- pushup-first mobile challenge flow
-- guest challenge sessions
-- registered challenge history
-- generic exercise catalog with pushups enabled first
+## 8. Sharing UX
+
+Sharing should feel fast and phone-native.
+
+Required sharing behavior:
+
+- result card image is the primary sharing artifact
+- primary share action invokes the mobile native share sheet
+- download remains available as fallback
+- no direct Instagram publishing flow is required
+
+The experience should optimize for real phone behavior rather than ideal browser demos.
+
+## 9. Coach Discovery UX
+
+Coach visibility should feel public and useful without turning users into public profiles.
+
+Required coach surfaces:
+
 - public coach directory
-- public coach pages
-- coach application and approval foundation
-- result card generation
-- native share-sheet integration
+- public coach profile page
+- business details shown on the public page
 
-Out of scope:
+Only approved, visible coaches should appear publicly.
 
-- Teams
+## 10. Privacy and Persistence UX Boundaries
+
+- guests can use the challenge flow without persistence
+- registered users can save challenge history
+- the backend does not store raw video, camera feed, raw pose landmarks, or audio
+- local video export is allowed as a user-controlled download
+
+## 11. Design Boundaries for the Current MVP
+
+Out of scope for this design slice:
+
 - public user profiles
 - in-app social feed
-- direct Instagram publishing
+- Teams or gym entities
 - multi-exercise UI beyond pushups
-- advanced events or competition systems
-
-## 12. Infrastructure Direction
-
-| Concern | MVP choice |
-|---------|------------|
-| Frontend | Next.js App Router |
-| Hosting | Vercel |
-| Auth + DB | Supabase |
-| Pose detection | MediaPipe client-side |
-| Result card generation | Browser-side canvas export |
-| Sharing | Web Share API with download fallback |
-
-The key architectural direction is challenge-first, share-first, and coach-visibility-aware rather than generic workout tracking.
+- advanced competition systems

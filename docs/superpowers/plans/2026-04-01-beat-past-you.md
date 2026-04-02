@@ -1,136 +1,91 @@
-# Beat Past You: Revised Product and Delivery Plan
+# Beat Past You - Delivery Plan
 
-## Summary
+**Date:** 2026-04-02  
+**Status:** Active implementation roadmap
 
-Beat Past You is a social fitness challenge platform built around self-improvement, visibility, and shareability, not a generic workout tracker. The first real experience is a portrait, front-camera, pushup challenge session that tracks live reps and elapsed time, then produces a shareable result card opened through the mobile native share sheet.
+## 1. Current Implementation Status
 
-The near-term product optimizes for:
+### Implemented
 
-- pushups only in the UI, with a generic exercise model underneath
-- external sharing as a first-class feature
-- public coach discovery and public coach pages
-- no Teams yet
-- no public user profiles
-- no in-app feed
-- manual start and stop session flow
-- saved session metrics in Supabase
+- product copy reframed around challenge, session, result, and sharing
+- generic exercise catalog in code with pushups enabled first
+- Supabase schema and repository foundation
+- seeded Supabase test data and connectivity scripts
+- public coach directory
+- public coach pages with business details
+- portrait pushup challenge surface
+- front-camera session flow with setup guidance
+- live pose overlay using MediaPipe
+- live rep count, elapsed time, tracking state, and side elevator
+- countdown before live mode
+- elapsed time beginning on first valid movement instead of setup time
+- result card generation
+- native share-sheet integration for result sharing
+- burned-in session video export with local download
+- MP4-first session video export when supported, with WebM fallback
+- cancel and reset behavior that discards the active recording
 
-## Key Product Decisions
+### Partially Implemented / Needs Improvement
 
-- Keep Beat Past You as the working name.
-- Frame the product as a social self-challenge platform, not a generic workout app.
-- Treat sharing as equally important to performing the session.
-- Model exercises generically, but enable only pushups in the first release.
-- The first live session uses:
-  - portrait orientation
-  - front camera
-  - phone propped low in front
-  - pose overlay
-  - rep counter
-  - side elevator showing body height
-- Omit the top HUD bar shown in the reference for v1.
-- Use manual stop instead of target-based or timer-based completion.
-- Persist rep count and elapsed time so future derived metrics can be computed later.
-- Use a result card image as the first share artifact, not a clip.
-- Use the mobile native share sheet for v1 sharing.
-- Do not implement direct Instagram publishing in the near term.
-- Do not include caption text on result cards in v1.
-- Coach visibility includes:
-  - directory listing
-  - public coach page
-  - business details rendered on that page
-- Teams and gym entities are explicitly deferred.
+- pushup counting reliability is still heuristic-based and needs real-device tuning
+- video export compatibility still depends on browser support for MP4 recording
+- account, history, coach, and admin surfaces exist but remain scaffolded in places
 
-## Implementation Changes
+### Not Yet Implemented
 
-### Product and copy
+- production auth UI and sign-in flow
+- coach attach, remove, and replace actions
+- coach application submission flow
+- admin approve and reject mutations
+- multi-exercise UI beyond pushups
+- competitions
+- Teams and gym entities
 
-- Rewrite product copy, metadata, and planning language around challenge, session, result, share, and visibility.
-- Remove generic workout-tracker framing from user-facing surfaces where it shapes expectations.
+## 2. Immediate Priorities
 
-### Domain and data model
+### Priority 1: Challenge Quality
 
-- Introduce a generic exercise catalog and seed pushups as the first enabled exercise.
-- Shift app-facing concepts toward challenge session terminology while keeping the existing `workouts` table as the first persistence boundary.
-- Persist session records with at least:
-  - exercise reference
-  - occurred timestamp
-  - elapsed time
-  - rep count
-  - attribution snapshot
-- Preserve the existing attribution model for app-vs-coach branding.
-- Keep Teams out of the immediate schema and UI plan.
+- tune pushup counting against real captured sessions
+- reduce false positives from setup and unrelated movement
+- reduce false negatives during valid pushups
+- improve user feedback when tracking quality is poor
 
-### Live pushup session
+### Priority 2: Auth and Persistence Completion
 
-- Build the first session screen specifically for portrait mobile.
-- Use front camera capture with setup guidance for low propped placement.
-- Render:
-  - live camera preview
-  - pose skeleton overlay
-  - live pushup rep count
-  - side elevator that tracks vertical pushup position
-  - manual controls to start, pause, resume, and stop
-- Use basic depth and lockout thresholds with tunable heuristics for rep counting.
-- Persist both reps and elapsed time for authenticated users. Guests remain stateless.
+- add signup and login UI
+- connect authenticated identity cleanly to account and history surfaces
+- tighten save behavior and empty states for registered users
 
-### Result and sharing
+### Priority 3: Coach Platform Completion
 
-- Generate a mobile-first result card image after session completion.
-- Provide a primary Share action that invokes the system share sheet on mobile.
-- Keep Download as a fallback action.
-- Do not implement:
-  - direct Instagram feed publishing
-  - Stories-specific API work
-  - session video export
-  - in-app post or feed mechanics
+- add coach application submission
+- add attach, remove, and replace coach actions
+- add admin approval and rejection actions
 
-### Coach visibility
+## 3. Next Delivery Slices
 
-- Keep the public coach directory.
-- Add a dedicated public coach page that combines:
-  - coach identity and profile
-  - business profile details
-  - business branding where available
-- Keep ordinary users private in-app. Do not add public user profile pages yet.
+1. Improve rep-counting reliability using recorded real-device sessions.
+2. Complete auth UI and session-aware user flows.
+3. Finish coach relationship mutations and coach application write paths.
+4. Finish admin operations for coach review and approval.
+5. Expand challenge metrics and polish the result/share experience.
+6. Add more exercises on top of the generic exercise model.
 
-## Recommended Delivery Order
+## 4. Validation Checklist
 
-1. Rewrite the spec and plan around challenge-first terminology.
-2. Introduce the generic exercise and session model while keeping pushups as the only enabled exercise.
-3. Implement the live pushup session shell and portrait challenge UI.
-4. Implement pushup pose tracking, rep counting, and elapsed-time capture.
-5. Persist session results for authenticated users.
-6. Generate result cards and integrate native share-sheet flow.
-7. Add public coach pages and connect them to directory entries.
-8. Continue auth, account, and history surfaces around the saved session model.
+- pushup challenge works on a real phone in portrait mode
+- elapsed time excludes setup time
+- rep counts are believable on repeated real-world tests
+- result card sharing works from the mobile share sheet
+- session video export is playable and shareable on target devices
+- registered users can save and later view session history
+- public coach directory and coach pages reflect only approved, visible coaches
 
-## Test Plan
+## 5. Ongoing Documentation Rule
 
-- Pushup session opens in portrait and uses the expected front-camera setup flow.
-- Manual start and stop record elapsed time accurately.
-- Rep counting increments only on valid pushup cycles using depth and lockout heuristics.
-- Side elevator reflects the athlete's live vertical position.
-- Guests can complete a session and share or download a result card without persistence.
-- Registered users can save a session and later view it in history.
-- Saved sessions persist:
-  - exercise
-  - elapsed time
-  - rep count
-  - attribution snapshot
-- Mobile share action opens the native or system share sheet successfully.
-- Result cards are visually suitable for mobile sharing destinations.
-- Public coach directory shows only approved, visible coaches.
-- Public coach page renders coach data and business details correctly.
-- No public user profile or in-app feed behavior is introduced.
+When implementation changes affect shipped behavior, the following should be updated in the same branch or PR:
 
-## Assumptions and Defaults
-
-- Beat Past You remains the working product name.
-- Pushups are the only enabled exercise in the first release.
-- The underlying data model still supports future exercises.
-- Teams are deferred entirely from the next implementation slices.
-- External sharing via the native share sheet is the correct v1 sharing solution.
-- Direct Instagram posting is explicitly deferred.
-- Caption overlays are excluded from v1 result cards.
-- The top session HUD bar is excluded from v1 until it has a clear product meaning.
+- `README.md` for current-state accuracy
+- PRD if product requirements changed
+- design spec if live UX or export behavior changed
+- delivery plan if roadmap status changed
