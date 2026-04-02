@@ -39,7 +39,7 @@ export const defaultPushupThresholds: PushupThresholds = {
   downAngle: 100,
   upAngle: 155,
   minimumConfidence: 0.45,
-  minimumPostureConfidence: 0.54,
+  minimumPostureConfidence: 0.5,
   minimumReadyFrames: 6,
 }
 
@@ -113,10 +113,6 @@ export function analyzePushupLandmarks(landmarks: PosePoint[]): PushupFrameAnaly
   const rightWrist = landmarks[poseIndexes.rightWrist]
   const leftHip = landmarks[poseIndexes.leftHip]
   const rightHip = landmarks[poseIndexes.rightHip]
-  const leftKnee = landmarks[poseIndexes.leftKnee]
-  const rightKnee = landmarks[poseIndexes.rightKnee]
-  const leftAnkle = landmarks[poseIndexes.leftAnkle]
-  const rightAnkle = landmarks[poseIndexes.rightAnkle]
   const nose = landmarks[poseIndexes.nose]
 
   const requiredPoints = [
@@ -135,18 +131,7 @@ export function analyzePushupLandmarks(landmarks: PosePoint[]): PushupFrameAnaly
     return null
   }
 
-  const lowerLeftPoint = leftAnkle ?? leftKnee
-  const lowerRightPoint = rightAnkle ?? rightKnee
-
-  if (!lowerLeftPoint || !lowerRightPoint) {
-    return null
-  }
-
-  const confidenceValues = [
-    ...requiredPoints,
-    lowerLeftPoint,
-    lowerRightPoint,
-  ].map((point) => point.visibility ?? 1)
+  const confidenceValues = requiredPoints.map((point) => point.visibility ?? 1)
   const trackingConfidence = average(confidenceValues)
   const leftAngle = calculateAngle(leftShoulder, leftElbow, leftWrist)
   const rightAngle = calculateAngle(rightShoulder, rightElbow, rightWrist)
@@ -154,44 +139,45 @@ export function analyzePushupLandmarks(landmarks: PosePoint[]): PushupFrameAnaly
   const bodyHeight = clamp((averageElbowAngle - 90) / 80, 0, 1)
   const shoulderMid = midpoint(leftShoulder, rightShoulder)
   const hipMid = midpoint(leftHip, rightHip)
-  const lowerMid = midpoint(lowerLeftPoint, lowerRightPoint)
   const wristMid = midpoint(leftWrist, rightWrist)
   const elbowMid = midpoint(leftElbow, rightElbow)
-  const torsoLength = distance(shoulderMid, hipMid)
-  const lowerBodyLength = distance(hipMid, lowerMid)
-  const bodySpan = Math.max(distance(shoulderMid, lowerMid), torsoLength + lowerBodyLength, 0.001)
-  const torsoVerticalRatio = Math.abs(hipMid.y - shoulderMid.y) / Math.max(torsoLength, 0.001)
-  const lowerBodyVerticalRatio = Math.abs(lowerMid.y - hipMid.y) / Math.max(lowerBodyLength, 0.001)
-  const torsoHorizontalScore = 1 - normalizeScore(torsoVerticalRatio, 0.28, 0.75)
-  const lowerBodyHorizontalScore = 1 - normalizeScore(lowerBodyVerticalRatio, 0.3, 0.82)
-  const handPlacementScore = normalizeScore(wristMid.y - shoulderMid.y, 0.08, 0.3)
-  const elbowPlacementScore = normalizeScore(elbowMid.y - shoulderMid.y, 0.02, 0.18)
-  const shoulderCoverageScore = normalizeScore(distance(leftShoulder, rightShoulder), 0.12, 0.3)
-  const headNearShouldersScore =
-    1 - normalizeScore(Math.abs(nose.y - shoulderMid.y), 0.08, 0.35)
+  const shoulderWidth = Math.max(distance(leftShoulder, rightShoulder), 0.001)
+  const wristWidth = distance(leftWrist, rightWrist)
+  const averageArmReach = average([
+    distance(leftShoulder, leftWrist),
+    distance(rightShoulder, rightWrist),
+  ])
+  const torsoDrop = Math.abs(hipMid.y - shoulderMid.y)
+  const torsoSupportScore = 1 - normalizeScore(torsoDrop, 0.14, 0.34)
+  const handPlacementScore = normalizeScore(wristMid.y - shoulderMid.y, 0.06, 0.28)
+  const elbowPlacementScore = normalizeScore(elbowMid.y - shoulderMid.y, 0.01, 0.22)
+  const wristSpreadScore = normalizeScore(wristWidth / shoulderWidth, 0.72, 1.9)
+  const armReachScore = normalizeScore(averageArmReach / shoulderWidth, 0.9, 2.45)
+  const headAlignmentScore =
+    1 - normalizeScore(Math.abs(nose.x - shoulderMid.x), 0.08, 0.28)
   const postureConfidence = clamp(
     average([
-      torsoHorizontalScore,
-      lowerBodyHorizontalScore,
+      torsoSupportScore,
       handPlacementScore,
       elbowPlacementScore,
-      shoulderCoverageScore,
-      headNearShouldersScore,
+      wristSpreadScore,
+      armReachScore,
+      headAlignmentScore,
     ]),
     0,
     1
   )
   const hasPushupShape =
-    torsoVerticalRatio <= 0.58 &&
-    lowerBodyVerticalRatio <= 0.68 &&
-    wristMid.y - shoulderMid.y >= 0.08 &&
-    elbowMid.y - shoulderMid.y >= 0.02
+    torsoDrop <= 0.18 &&
+    wristMid.y - shoulderMid.y >= 0.06 &&
+    elbowMid.y - shoulderMid.y >= 0.01 &&
+    wristWidth / shoulderWidth >= 0.72 &&
+    averageArmReach / shoulderWidth >= 0.9
   const isConfident = trackingConfidence >= defaultPushupThresholds.minimumConfidence
   const isPushupReady =
     isConfident &&
     hasPushupShape &&
-    postureConfidence >= defaultPushupThresholds.minimumPostureConfidence &&
-    bodySpan >= 0.22
+    postureConfidence >= defaultPushupThresholds.minimumPostureConfidence
 
   return {
     averageElbowAngle,

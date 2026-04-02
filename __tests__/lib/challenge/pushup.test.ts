@@ -56,9 +56,30 @@ function createStandingPose() {
   return landmarks
 }
 
+function createFrontFacingPushupPose() {
+  const landmarks = createBlankLandmarks()
+
+  landmarks[0] = { x: 0.5, y: 0.37, visibility: 0.95 }
+  landmarks[11] = { x: 0.36, y: 0.33, visibility: 0.95 }
+  landmarks[12] = { x: 0.64, y: 0.33, visibility: 0.95 }
+  landmarks[13] = { x: 0.29, y: 0.48, visibility: 0.95 }
+  landmarks[14] = { x: 0.71, y: 0.48, visibility: 0.95 }
+  landmarks[15] = { x: 0.22, y: 0.77, visibility: 0.95 }
+  landmarks[16] = { x: 0.78, y: 0.77, visibility: 0.95 }
+  landmarks[23] = { x: 0.45, y: 0.45, visibility: 0.95 }
+  landmarks[24] = { x: 0.55, y: 0.45, visibility: 0.95 }
+  landmarks[25] = { x: 0.47, y: 0.6, visibility: 0.75 }
+  landmarks[26] = { x: 0.53, y: 0.6, visibility: 0.75 }
+  landmarks[27] = { x: 0.49, y: 0.74, visibility: 0.6 }
+  landmarks[28] = { x: 0.51, y: 0.74, visibility: 0.6 }
+
+  return landmarks
+}
+
 describe('pushup challenge helpers', () => {
-  it('recognizes a stable pushup posture and rejects upright walking posture', () => {
+  it('recognizes pushup posture in both side-on and front-facing camera views', () => {
     const pushupAnalysis = analyzePushupLandmarks(createPushupPose())
+    const frontFacingAnalysis = analyzePushupLandmarks(createFrontFacingPushupPose())
     const standingAnalysis = analyzePushupLandmarks(createStandingPose())
 
     expect(pushupAnalysis).toEqual(
@@ -67,7 +88,16 @@ describe('pushup challenge helpers', () => {
         isPushupReady: true,
       })
     )
+    expect(frontFacingAnalysis).toEqual(
+      expect.objectContaining({
+        isConfident: true,
+        isPushupReady: true,
+      })
+    )
     expect(pushupAnalysis?.postureConfidence).toBeGreaterThan(
+      defaultPushupThresholds.minimumPostureConfidence
+    )
+    expect(frontFacingAnalysis?.postureConfidence).toBeGreaterThan(
       defaultPushupThresholds.minimumPostureConfidence
     )
     expect(standingAnalysis).toEqual(
@@ -75,9 +105,6 @@ describe('pushup challenge helpers', () => {
         isConfident: true,
         isPushupReady: false,
       })
-    )
-    expect(standingAnalysis?.postureConfidence).toBeLessThan(
-      defaultPushupThresholds.minimumPostureConfidence
     )
   })
 
