@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Effort Engine</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #f4f5f7;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    color: #1a1a1a;
+    padding: 32px 24px 60px;
+  }
+
+  h2 { font-size: 11px; letter-spacing: 4px; text-transform: uppercase; color: #999; margin-bottom: 6px; text-align: center; }
+  .subtitle { font-size: 12px; color: #bbb; text-align: center; margin-bottom: 40px; }
+
+  .section { max-width: 660px; margin: 0 auto 44px; }
+  .section-label { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: #aaa; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #e8e8e8; }
+
+  /* FACTORS */
+  .factors { display: flex; flex-direction: column; gap: 8px; }
+
+  .factor {
+    display: flex; align-items: flex-start; gap: 14px;
+    background: #fff; border-radius: 10px; padding: 14px 16px;
+    border: 1px solid #eee; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    border-left: 4px solid var(--f-color);
+  }
+
+  .factor-weight {
+    flex-shrink: 0; width: 44px; text-align: center;
+    padding-top: 2px;
+  }
+
+  .factor-pct {
+    font-size: 18px; font-weight: 900; color: var(--f-color); line-height: 1;
+  }
+
+  .factor-label {
+    font-size: 8px; letter-spacing: 1px; text-transform: uppercase;
+    color: #ccc; margin-top: 2px;
+  }
+
+  .factor-body { flex: 1; }
+  .factor-title { font-size: 12px; font-weight: 700; color: #333; margin-bottom: 3px; }
+  .factor-desc { font-size: 10px; color: #888; line-height: 1.6; }
+
+  .factor-example {
+    margin-top: 6px; font-size: 10px;
+    background: #fafafa; border-radius: 4px;
+    padding: 6px 10px; color: #aaa;
+    border-left: 2px solid var(--f-color);
+  }
+
+  .factor-example strong { color: var(--f-color); }
+
+  /* JOURNEY TIMELINE */
+  .timeline {
+    background: #fff; border-radius: 12px;
+    border: 1px solid #eee; overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+
+  .timeline-header {
+    padding: 14px 20px; background: #fafafa;
+    border-bottom: 1px solid #eee;
+    font-size: 10px; color: #aaa;
+    display: flex; gap: 24px;
+  }
+
+  .timeline-header span { display: flex; align-items: center; gap: 6px; }
+  .tl-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  .timeline-body { padding: 20px; }
+
+  .sessions { display: flex; gap: 0; align-items: flex-end; height: 160px; position: relative; }
+
+  .bar-wrap {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; gap: 0; position: relative;
+  }
+
+  .bar-spacer { flex: 1; }
+
+  .bar {
+    width: 28px; border-radius: 4px 4px 0 0;
+    position: relative; cursor: default;
+    transition: opacity 0.2s;
+  }
+
+  .bar:hover { opacity: 0.85; }
+
+  .bar-tooltip {
+    position: absolute; bottom: calc(100% + 6px); left: 50%;
+    transform: translateX(-50%);
+    background: #1a1a1a; color: #fff;
+    font-size: 9px; white-space: nowrap;
+    padding: 4px 8px; border-radius: 4px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 10;
+  }
+
+  .bar:hover .bar-tooltip { opacity: 1; }
+
+  .bar-score {
+    font-size: 8px; font-weight: 700;
+    text-align: center; margin-bottom: 3px;
+    color: #999;
+  }
+
+  .bar-rep {
+    font-size: 8px; color: #ccc;
+    text-align: center; padding: 3px 0;
+  }
+
+  .session-type-tag {
+    font-size: 7px; letter-spacing: 0.5px;
+    text-transform: uppercase; text-align: center;
+    padding: 2px 0; color: #bbb;
+    line-height: 1.3; margin-top: 4px;
+    max-width: 48px;
+  }
+
+  .baseline { position: absolute; bottom: 0; left: 0; right: 0; height: 1px; background: #eee; }
+
+  /* SESSION TYPE CARDS */
+  .types { display: flex; flex-direction: column; gap: 8px; }
+
+  .type-row {
+    display: flex; gap: 10px; align-items: stretch;
+    background: #fff; border-radius: 10px; padding: 14px 16px;
+    border: 1px solid #eee; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  .type-badge {
+    flex-shrink: 0; width: 90px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 6px; padding: 8px;
+    font-size: 9px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; text-align: center; line-height: 1.4;
+  }
+
+  .type-body { flex: 1; }
+  .type-title { font-size: 11px; font-weight: 700; color: #333; margin-bottom: 3px; }
+  .type-desc { font-size: 10px; color: #888; line-height: 1.5; margin-bottom: 6px; }
+  .type-quote { font-size: 10px; color: #aaa; font-style: italic; line-height: 1.5; }
+  .type-score { flex-shrink: 0; width: 48px; text-align: center; padding-top: 2px; }
+  .type-score-num { font-size: 22px; font-weight: 900; line-height: 1; }
+  .type-score-label { font-size: 8px; color: #ccc; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<h2>Product Design — Section 3</h2>
+<p class="subtitle">The effort engine — how the score is calculated</p>
+
+<!-- SCORING FACTORS -->
+<div class="section">
+  <div class="section-label">Four factors that feed the effort score</div>
+  <div class="factors">
+
+    <div class="factor" style="--f-color: #2e7be0">
+      <div class="factor-weight">
+        <div class="factor-pct">35%</div>
+        <div class="factor-label">weight</div>
+      </div>
+      <div class="factor-body">
+        <div class="factor-title">Journey stage</div>
+        <div class="factor-desc">How far into this exercise stream are you? Early sessions improve fast — the body adapts. Later sessions are harder to move. The engine knows where you are and adjusts expectations accordingly.</div>
+        <div class="factor-example"><strong>Example:</strong> Session 3 with +40% is expected. Session 40 with +5% is exceptional.</div>
+      </div>
+    </div>
+
+    <div class="factor" style="--f-color: #e02e5a">
+      <div class="factor-weight">
+        <div class="factor-pct">30%</div>
+        <div class="factor-label">weight</div>
+      </div>
+      <div class="factor-body">
+        <div class="factor-title">Plateau history</div>
+        <div class="factor-desc">How long has it been since you last improved on this exercise? Every failed session before today builds pressure. Breaking a 4-session plateau scores far higher than improving on your first try.</div>
+        <div class="factor-example"><strong>Example:</strong> Stuck at 17 push-ups for 3 sessions. Today: 18. That single rep is worth more than going 10→17 in session 2.</div>
+      </div>
+    </div>
+
+    <div class="factor" style="--f-color: #e07a2e">
+      <div class="factor-weight">
+        <div class="factor-pct">20%</div>
+        <div class="factor-label">weight</div>
+      </div>
+      <div class="factor-body">
+        <div class="factor-title">Consistency</div>
+        <div class="factor-desc">Are you showing up regularly? A streak of consistent sessions — even without improvement — means the effort is real and sustained. Consistency also gets its own card type when the number doesn't move.</div>
+        <div class="factor-example"><strong>Example:</strong> 8 sessions in 10 days with no rep gain still scores a 52 — because showing up is the work.</div>
+      </div>
+    </div>
+
+    <div class="factor" style="--f-color: #2eaa6e">
+      <div class="factor-weight">
+        <div class="factor-pct">15%</div>
+        <div class="factor-label">weight</div>
+      </div>
+      <div class="factor-body">
+        <div class="factor-title">Form quality</div>
+        <div class="factor-desc">Did the reps count fully? 20 reps with 90% good form scores higher than 20 reps with 50% good form. Consistently improving form — even at the same rep count — is recognised as progress.</div>
+        <div class="factor-example"><strong>Example:</strong> Same 15 reps as last time, but form score went from 60% → 85%. Card acknowledges the quality improvement.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- SAMPLE JOURNEY -->
+<div class="section">
+  <div class="section-label">What a real journey looks like — push-ups over 8 sessions</div>
+  <div class="timeline">
+    <div class="timeline-header">
+      <span><div class="tl-dot" style="background:#2e7be0"></div> Reps (right axis)</span>
+      <span><div class="tl-dot" style="background:#e02e5a"></div> Effort score (bar height)</span>
+    </div>
+    <div class="timeline-body">
+      <div class="sessions">
+        <div class="baseline"></div>
+
+        <!-- S1: First session, 8 reps. Score 55 (first win bonus) -->
+        <div class="bar-wrap">
+          <div class="bar-spacer"></div>
+          <div class="bar-score">55</div>
+          <div class="bar" style="height:88px; background: linear-gradient(to top, #2e7be0, #5a9eff);">
+            <div class="bar-tooltip">Session 1 · 8 reps · First win</div>
+          </div>
+          <div class="bar-rep">8</div>
+          <div class="session-type-tag" style="color:#2e7be0">First win</div>
+        </div>
+
+        <!-- S2: 12 reps +50%. Score 48 (easy gain, early) -->
+        <div class="bar-wrap">
+          <div class="bar-spacer"></div>
+          <div class="bar-score">48</div>
+          <div class="bar" style="height:77px; background: linear-gradient(to top, #7a7a7a, #aaa);">
+            <div class="bar-tooltip">Session 2 · 12 reps · +50% (expected)</div>
+          </div>
+          <div class="bar-rep">12</div>
+          <div class="session-type-tag">Early gain</div>
+        </div>
+
+        <!-- S3: 15 reps +25%. Score 42 -->
+        <div class="bar-wrap">
+          <div class="bar-spacer"></div>
+          <div class="bar-score">42</div>
+          <div class="bar" style="height:67px; background: linear-gradient(to top, #7a7a7a, #aaa);">
+            <div class="bar-tooltip">Session 3 · 15 reps · +25%</div>
+          </div>
+          <div class="bar-rep">15</div>
+          <div class="session-type-tag">Steady</div>
+        </div>
+
+        <!-- S4: 15 reps — no change. Score 38 (consistency) -->
+        <div class="bar-wrap">
+          <div class="bar-spacer"></div>
+          <div class="bar-score">38</div>
+          <div class="bar" style="height:61px; background: linear-gradient(to top, #e07a2e, #f5a050);">
+            <div class="bar-tooltip">Session 4 · 15 reps · No change · Consistency</div>
+          </div>
+          <div class="bar-rep">15</div>
+          <div class="session-type-tag" style="color:#e07a2e">Showing up</div>
+        </div>
+
+        <!-- S5: 15 reps — no change again. Score 44 (plateau building) -->
+        <div class="bar-wrap">
+          <div class="bar-spacer"></div>
+          <div class="bar-score">44</div>
+          <div class="bar" style="height:70px; background: linear-gradient(to top, #e07a2e, #f5a050);">
+            <div class="bar-tooltip">Session 5 · 15 reps · Plateau building</div>
+          </div>
+          <div class="bar-rep">15</div>
+          <div class="session-type-tag" style="color:#e07a2e">The grind</div>
+        </div>
+
+        <!-- S6: 15 reps — third no change. Score 50 -->
+        <div class="bar-wrap">
+          <div class="bar-spacer"></div>
+          <div class="bar-score">50</div>
+          <div class="bar" style="height:80px; background: linear-gradient(to top, #e02e5a, #ff6080);">
+            <div class="bar-tooltip">Session 6 · 15 reps · 3rd plateau session</div>
+          </div>
+          <div class="bar-rep">15</div>
+          <div class="session-type-tag" style="color:#e02e5a">Plateau</div>
+        </div>
+
+        <!-- S7: 16 reps — BREAKTHROUGH. Score 82 -->
+        <div class="bar-wrap">
+          <div class="bar-spacer"></div>
+          <div class="bar-score" style="color:#e02e5a; font-size:10px;">82 ⚡</div>
+          <div class="bar" style="height:131px; background: linear-gradient(to top, #e02e5a, #ff2255); box-shadow: 0 0 12px rgba(224,46,90,0.4);">
+            <div class="bar-tooltip">Session 7 · 16 reps · PLATEAU BROKEN · +1 rep after 3 tries</div>
+          </div>
+          <div class="bar-rep" style="color:#e02e5a; font-weight:700">16</div>
+          <div class="session-type-tag" style="color:#e02e5a; font-weight:700">Breakthrough</div>
+        </div>
+
+        <!-- S8: 17 reps. Score 61 (still hard, late stage) -->
+        <div class="bar-wrap">
+          <div class="bar-spacer"></div>
+          <div class="bar-score">61</div>
+          <div class="bar" style="height:97px; background: linear-gradient(to top, #2eaa6e, #50cc90);">
+            <div class="bar-tooltip">Session 8 · 17 reps · Sustained improvement</div>
+          </div>
+          <div class="bar-rep">17</div>
+          <div class="session-type-tag" style="color:#2eaa6e">Sustained</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SESSION TYPES -->
+<div class="section">
+  <div class="section-label">Session types — what each one generates</div>
+  <div class="types">
+
+    <div class="type-row">
+      <div class="type-badge" style="background:#eef4ff; color:#2e7be0">First Win</div>
+      <div class="type-body">
+        <div class="type-title">First session ever on this exercise</div>
+        <div class="type-desc">Always celebrated regardless of count. The beginning of the story.</div>
+        <div class="type-quote">"So it begins. You showed up. Most people never do. — Future You"</div>
+      </div>
+      <div class="type-score">
+        <div class="type-score-num" style="color:#2e7be0">55</div>
+        <div class="type-score-label">score</div>
+      </div>
+    </div>
+
+    <div class="type-row">
+      <div class="type-badge" style="background:#fff5ee; color:#e07a2e">The Grind</div>
+      <div class="type-body">
+        <div class="type-title">Showed up — no rep improvement</div>
+        <div class="type-desc">Recognised for consistency. The number didn't move, but you did.</div>
+        <div class="type-quote">"You came back. No glory today. Just the work. That's enough. — March You"</div>
+      </div>
+      <div class="type-score">
+        <div class="type-score-num" style="color:#e07a2e">38</div>
+        <div class="type-score-label">score</div>
+      </div>
+    </div>
+
+    <div class="type-row">
+      <div class="type-badge" style="background:#fff0f3; color:#e02e5a">Breakthrough</div>
+      <div class="type-body">
+        <div class="type-title">Improved after a plateau of 3+ sessions</div>
+        <div class="type-desc">Maximum drama. Even +1 rep after weeks of nothing deserves the full card.</div>
+        <div class="type-quote">"I thought I'd broken you. Three times you came back with nothing. Then this. I have no words. — Past You"</div>
+      </div>
+      <div class="type-score">
+        <div class="type-score-num" style="color:#e02e5a">82</div>
+        <div class="type-score-label">score</div>
+      </div>
+    </div>
+
+    <div class="type-row">
+      <div class="type-badge" style="background:#eefff6; color:#2eaa6e">Form Win</div>
+      <div class="type-body">
+        <div class="type-title">Same reps, but significantly better form</div>
+        <div class="type-desc">Quality improvement is progress. The card focuses on form score, not rep count.</div>
+        <div class="type-quote">"Same count. But not the same reps. You're doing this right now. I wasn't. — Sloppy March You"</div>
+      </div>
+      <div class="type-score">
+        <div class="type-score-num" style="color:#2eaa6e">57</div>
+        <div class="type-score-label">score</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

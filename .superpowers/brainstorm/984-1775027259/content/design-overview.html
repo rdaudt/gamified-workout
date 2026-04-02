@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product Design Overview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    font-family: 'Arial', sans-serif;
+    color: #fff;
+    padding: 32px 24px 60px;
+    min-height: 100vh;
+  }
+
+  h2 { font-size: 12px; letter-spacing: 4px; text-transform: uppercase; color: #444; margin-bottom: 6px; text-align: center; }
+  .subtitle { font-size: 11px; color: #2a2a2a; text-align: center; margin-bottom: 40px; }
+
+  .section { max-width: 600px; margin: 0 auto 36px; }
+
+  .section-label {
+    font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+    color: #333; margin-bottom: 14px; padding-bottom: 8px;
+    border-bottom: 1px solid #141414;
+  }
+
+  /* PRODUCT NAME BLOCK */
+  .product-block {
+    background: #0f0f0f;
+    border: 1px solid #1a1a1a;
+    border-left: 3px solid #e94560;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+
+  .product-name {
+    font-size: 22px; font-weight: 900; letter-spacing: -1px;
+    color: #fff; margin-bottom: 4px;
+  }
+
+  .product-name span { color: #e94560; }
+
+  .product-tagline {
+    font-size: 12px; color: #444; line-height: 1.6; margin-top: 8px;
+  }
+
+  /* THREE THINGS */
+  .three-col { display: flex; gap: 12px; }
+
+  .col-card {
+    flex: 1;
+    background: #0f0f0f;
+    border: 1px solid #1a1a1a;
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .col-icon { font-size: 20px; margin-bottom: 8px; }
+  .col-title { font-size: 12px; font-weight: 700; color: #ccc; margin-bottom: 6px; }
+  .col-desc { font-size: 10px; color: #444; line-height: 1.6; }
+
+  /* FUNNEL */
+  .funnel { display: flex; flex-direction: column; gap: 2px; }
+
+  .funnel-step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    background: #0f0f0f;
+    border: 1px solid #161616;
+    position: relative;
+  }
+
+  .funnel-step::after {
+    content: '↓';
+    position: absolute;
+    bottom: -13px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: #222;
+    z-index: 1;
+  }
+
+  .funnel-step:last-child::after { display: none; }
+
+  .funnel-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .funnel-body { flex: 1; }
+  .funnel-title { font-size: 11px; font-weight: 700; color: #ccc; margin-bottom: 2px; }
+  .funnel-desc { font-size: 10px; color: #333; line-height: 1.5; }
+  .funnel-tag { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; margin-left: auto; flex-shrink: 0; }
+
+  .f1 .funnel-num { background: #0d1f33; color: #4a9eff; border: 1px solid #1a4a7a; }
+  .f1 .funnel-tag { color: #4a9eff; }
+
+  .f2 .funnel-num { background: #1a0a00; color: #e94; border: 1px solid #7a2a00; }
+  .f2 .funnel-tag { color: #e94; }
+
+  .f3 .funnel-num { background: #1a0008; color: #e94560; border: 1px solid #7a0020; }
+  .f3 .funnel-tag { color: #e94560; }
+
+  .f4 .funnel-num { background: #001a0a; color: #2ecc71; border: 1px solid #005a20; }
+  .f4 .funnel-tag { color: #2ecc71; }
+
+  /* WHAT IT IS NOT */
+  .not-list { display: flex; flex-direction: column; gap: 6px; }
+
+  .not-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    background: #0f0f0f;
+    border: 1px solid #141414;
+    border-radius: 6px;
+    font-size: 10px;
+  }
+
+  .not-x { color: #2a2a2a; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+  .not-text { color: #333; }
+  .yes-check { color: #e94560; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+  .yes-text { color: #666; }
+
+</style>
+</head>
+<body>
+
+<h2>Product Design — Section 1</h2>
+<p class="subtitle">What we're building and why it works</p>
+
+<!-- PRODUCT IDENTITY -->
+<div class="section">
+  <div class="section-label">The product</div>
+  <div class="product-block">
+    <div class="product-name">Beat <span>Past You</span></div>
+    <div style="font-size:10px; color:#333; letter-spacing:2px; text-transform:uppercase; margin-bottom:4px;">Working title</div>
+    <div class="product-tagline">
+      A free web app that uses your camera to count reps, track your personal history across exercise types, and generate a shareable performance card after every session — with automated form feedback and a natural path to personal training.
+    </div>
+  </div>
+</div>
+
+<!-- THREE JOBS -->
+<div class="section">
+  <div class="section-label">Three jobs this product does</div>
+  <div class="three-col">
+    <div class="col-card">
+      <div class="col-icon">📣</div>
+      <div class="col-title">Acquisition</div>
+      <div class="col-desc">Every shared card carries your brand to strangers. Free tool, zero friction, viral potential. People who find it become leads.</div>
+    </div>
+    <div class="col-card">
+      <div class="col-icon">🔁</div>
+      <div class="col-title">Retention</div>
+      <div class="col-desc">Streaks, history, and the "beat past you" mechanic keep people coming back. Clients stay engaged between sessions with you.</div>
+    </div>
+    <div class="col-card">
+      <div class="col-icon">🎯</div>
+      <div class="col-title">Conversion</div>
+      <div class="col-desc">Form flags create warm leads. "Your squat depth has been dropping — book a free assessment with [Your Name]." App does the screening; you close.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ACQUISITION FUNNEL -->
+<div class="section">
+  <div class="section-label">How a stranger becomes your client</div>
+  <div class="funnel">
+    <div class="funnel-step f1">
+      <div class="funnel-num">1</div>
+      <div class="funnel-body">
+        <div class="funnel-title">Sees a shared card on social media</div>
+        <div class="funnel-desc">A friend posts their "+38% push-ups" card. Your branding is on it. They click the link.</div>
+      </div>
+      <div class="funnel-tag">Discovery</div>
+    </div>
+    <div class="funnel-step f1">
+      <div class="funnel-num">2</div>
+      <div class="funnel-body">
+        <div class="funnel-title">Tries the app as a guest — no signup</div>
+        <div class="funnel-desc">Does one workout. Sees the live skeleton, hears the rep count, gets a card. Hooked.</div>
+      </div>
+      <div class="funnel-tag">Trial</div>
+    </div>
+    <div class="funnel-step f2">
+      <div class="funnel-num">3</div>
+      <div class="funnel-body">
+        <div class="funnel-title">Creates a free account to save their history</div>
+        <div class="funnel-desc">"Save this workout and start tracking your progress." Now they're a user. History builds. Streak starts.</div>
+      </div>
+      <div class="funnel-tag">Activation</div>
+    </div>
+    <div class="funnel-step f3">
+      <div class="funnel-num">4</div>
+      <div class="funnel-body">
+        <div class="funnel-title">App flags a form issue</div>
+        <div class="funnel-desc">"Your lower back is losing tension on push-ups after rep 12. This won't improve without coaching."</div>
+      </div>
+      <div class="funnel-tag">Warm lead</div>
+    </div>
+    <div class="funnel-step f4">
+      <div class="funnel-num">5</div>
+      <div class="funnel-body">
+        <div class="funnel-title">Books a free assessment with you</div>
+        <div class="funnel-desc">CTA embedded in the form feedback. They arrive already knowing what the problem is. You show them the fix. They sign up.</div>
+      </div>
+      <div class="funnel-tag">Client</div>
+    </div>
+  </div>
+</div>
+
+<!-- WHAT IT IS NOT -->
+<div class="section">
+  <div class="section-label">What this is — and isn't</div>
+  <div class="not-list">
+    <div class="not-item">
+      <div class="not-x">✕</div>
+      <div class="not-text">Not a subscription fitness app competing with Peloton or Nike Training</div>
+    </div>
+    <div class="not-item">
+      <div class="not-x">✕</div>
+      <div class="not-text">Not a video storage platform — no recordings are ever kept</div>
+    </div>
+    <div class="not-item">
+      <div class="not-x">✕</div>
+      <div class="not-text">Not a replacement for a trainer — it explicitly says so and points to you</div>
+    </div>
+    <div class="not-item">
+      <div class="yes-check">✓</div>
+      <div class="yes-text">A free tool that does something genuinely useful, carries your brand, and feeds your practice</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

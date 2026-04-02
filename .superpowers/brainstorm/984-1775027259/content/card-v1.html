@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Performance Card Preview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0a;
+    font-family: 'Arial Black', 'Arial', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+    padding: 32px 16px;
+    color: #fff;
+  }
+
+  .page-title {
+    color: #555;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .page-sub {
+    color: #333;
+    font-size: 11px;
+    margin-bottom: 32px;
+    text-align: center;
+  }
+
+  /* CARD */
+  .card-wrap {
+    position: relative;
+    width: 380px;
+    margin-bottom: 40px;
+  }
+
+  /* Outer glow — scales with intensity */
+  .card-wrap::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 16px;
+    background: var(--glow-gradient);
+    z-index: 0;
+    filter: blur(8px);
+    opacity: var(--glow-opacity);
+  }
+
+  .card {
+    position: relative;
+    z-index: 1;
+    background: #0f0f0f;
+    border-radius: 14px;
+    border: 1px solid var(--accent);
+    overflow: hidden;
+    padding: 0;
+  }
+
+  /* Top accent bar */
+  .top-bar {
+    height: 4px;
+    background: var(--bar-gradient);
+    width: 100%;
+  }
+
+  .card-inner {
+    padding: 24px;
+  }
+
+  /* Header row */
+  .header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+  }
+
+  .label-tag {
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .coach-tag {
+    font-size: 9px;
+    color: #333;
+    text-align: right;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    line-height: 1.5;
+  }
+
+  .coach-tag span {
+    color: #555;
+    display: block;
+  }
+
+  /* Big number section */
+  .numbers-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .num-block {
+    text-align: center;
+  }
+
+  .num-big {
+    font-size: 56px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -2px;
+  }
+
+  .num-big.today {
+    color: #fff;
+    text-shadow: 0 0 30px var(--accent), 0 0 60px var(--accent-dim);
+  }
+
+  .num-big.past {
+    color: #2a2a2a;
+  }
+
+  .num-label {
+    font-size: 8px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .num-label.today { color: #555; }
+  .num-label.past { color: #222; }
+
+  .arrow-block {
+    flex: 1;
+    text-align: center;
+  }
+
+  .arrow-svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  .pct-block {
+    margin-left: auto;
+    text-align: right;
+  }
+
+  .pct-number {
+    font-size: 52px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -2px;
+    background: var(--pct-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .pct-label {
+    font-size: 8px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #444;
+    margin-top: 2px;
+    text-align: right;
+  }
+
+  /* Intensity bar */
+  .intensity-section {
+    margin-bottom: 20px;
+  }
+
+  .intensity-label-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+
+  .intensity-label {
+    font-size: 8px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #333;
+  }
+
+  .intensity-value {
+    font-size: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .bar-track {
+    height: 3px;
+    background: #1a1a1a;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    width: var(--bar-width);
+    background: var(--bar-gradient);
+    border-radius: 2px;
+    position: relative;
+    transition: width 1s ease;
+  }
+
+  .bar-fill::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: -1px;
+    width: 4px;
+    height: 5px;
+    background: #fff;
+    border-radius: 2px;
+    box-shadow: 0 0 6px var(--accent);
+  }
+
+  /* Divider */
+  .divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, #1e1e1e 30%, #1e1e1e 70%, transparent);
+    margin-bottom: 18px;
+  }
+
+  /* Quote */
+  .quote-section {
+    margin-bottom: 20px;
+  }
+
+  .quote-marks {
+    color: var(--accent);
+    font-size: 28px;
+    line-height: 0.5;
+    opacity: 0.4;
+    margin-bottom: 8px;
+  }
+
+  .quote-text {
+    font-size: 12px;
+    color: #666;
+    font-style: italic;
+    line-height: 1.6;
+    font-family: Georgia, serif;
+    font-weight: normal;
+  }
+
+  .quote-source {
+    margin-top: 8px;
+    font-size: 9px;
+    color: #333;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* Footer */
+  .footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .streak-pill {
+    background: #161616;
+    border: 1px solid #222;
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-size: 9px;
+    color: #444;
+    letter-spacing: 1px;
+  }
+
+  .streak-pill span {
+    color: #e94;
+  }
+
+  .watermark {
+    font-size: 9px;
+    color: #222;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* Decorative corner element */
+  .corner-deco {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 80px;
+    height: 80px;
+    overflow: hidden;
+    opacity: var(--deco-opacity);
+  }
+
+  .corner-deco::after {
+    content: '';
+    position: absolute;
+    top: -40px;
+    right: -40px;
+    width: 80px;
+    height: 80px;
+    background: var(--accent);
+    transform: rotate(45deg);
+    opacity: 0.06;
+  }
+
+  /* =====================
+     INTENSITY SCALE DEMO
+     ===================== */
+  .scale-section {
+    width: 380px;
+    margin-bottom: 32px;
+  }
+
+  .scale-title {
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #333;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+
+  .scale-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .scale-item {
+    flex: 1;
+    border-radius: 8px;
+    padding: 12px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: transform 0.2s;
+    border: 1px solid transparent;
+  }
+
+  .scale-item:hover { transform: translateY(-2px); }
+
+  .scale-item.active { border-color: #444; }
+
+  .scale-pct {
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .scale-desc {
+    font-size: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    opacity: 0.5;
+    margin-top: 4px;
+  }
+
+  /* Low */
+  .scale-low { background: #111; }
+  .scale-low .scale-pct { color: #4a9eff; }
+
+  /* Medium */
+  .scale-med { background: #130d00; }
+  .scale-med .scale-pct { color: #e94; }
+
+  /* High */
+  .scale-high { background: #130000; }
+  .scale-high .scale-pct { color: #e94560; }
+
+  /* Extreme */
+  .scale-ext { background: #0d0010; }
+  .scale-ext .scale-pct { color: #bf5fff; }
+
+  .note {
+    font-size: 10px;
+    color: #333;
+    text-align: center;
+    margin-top: 16px;
+    line-height: 1.6;
+    max-width: 380px;
+  }
+
+</style>
+</head>
+<body>
+
+<div class="page-title">Shareable Card — High Intensity Preview</div>
+<div class="page-sub">This is what your client posts. Shown at 42% improvement. Scroll down to see the intensity scale.</div>
+
+<!-- CARD at 42% -->
+<div class="card-wrap" style="
+  --accent: #e94560;
+  --accent-dim: rgba(233,69,96,0.2);
+  --glow-gradient: linear-gradient(135deg, #e94560, #ff6b35);
+  --glow-opacity: 0.35;
+  --bar-gradient: linear-gradient(to right, #e94560, #ff6b35);
+  --pct-gradient: linear-gradient(135deg, #ff6b35 0%, #e94560 50%, #c0392b 100%);
+  --bar-width: 62%;
+  --deco-opacity: 1;
+">
+  <div class="card">
+    <div class="top-bar"></div>
+    <div class="card-inner" style="position:relative;">
+      <div class="corner-deco"></div>
+
+      <div class="header-row">
+        <div>
+          <div class="label-tag">Performance Report</div>
+          <div style="font-size:11px; color:#fff; font-weight:700; margin-top:4px; letter-spacing:1px;">Push-ups · Apr 1, 2026</div>
+        </div>
+        <div class="coach-tag">
+          Coached by<span>[Your Name]</span>yoursite.com
+        </div>
+      </div>
+
+      <div class="numbers-row">
+        <div class="num-block">
+          <div class="num-big today">17</div>
+          <div class="num-label today">Today</div>
+        </div>
+        <div class="arrow-block">
+          <svg class="arrow-svg" viewBox="0 0 28 28" fill="none">
+            <path d="M4 14 L20 14 M14 8 L20 14 L14 20" stroke="#e94560" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="num-block">
+          <div class="num-big past">12</div>
+          <div class="num-label past">Before</div>
+        </div>
+        <div class="pct-block">
+          <div class="pct-number">+42%</div>
+          <div class="pct-label">Improvement</div>
+        </div>
+      </div>
+
+      <div class="intensity-section">
+        <div class="intensity-label-row">
+          <div class="intensity-label">Progress intensity</div>
+          <div class="intensity-value">Strong</div>
+        </div>
+        <div class="bar-track">
+          <div class="bar-fill"></div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="quote-section">
+        <div class="quote-marks">"</div>
+        <div class="quote-text">You came back harder than I expected. I underestimated you. That won't happen again.</div>
+        <div class="quote-source">— Your March Self</div>
+      </div>
+
+      <div class="footer-row">
+        <div class="streak-pill">🔥 <span>6 day</span> streak</div>
+        <div class="watermark">[Your Name] · yoursite.com</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- INTENSITY SCALE -->
+<div class="scale-section">
+  <div class="scale-title">How the card scales with improvement %</div>
+  <div class="scale-row">
+    <div class="scale-item scale-low">
+      <div class="scale-pct">+8%</div>
+      <div style="font-size:8px; color:#4a9eff; margin-top:2px;">Blue glow</div>
+      <div class="scale-desc">Steady</div>
+    </div>
+    <div class="scale-item scale-med">
+      <div class="scale-pct">+25%</div>
+      <div style="font-size:8px; color:#e94; margin-top:2px;">Orange fire</div>
+      <div class="scale-desc">Strong</div>
+    </div>
+    <div class="scale-item scale-high active">
+      <div class="scale-pct">+42%</div>
+      <div style="font-size:8px; color:#e94560; margin-top:2px;">Red flame ← you are here</div>
+      <div class="scale-desc">Intense</div>
+    </div>
+    <div class="scale-item scale-ext">
+      <div class="scale-pct">+80%</div>
+      <div style="font-size:8px; color:#bf5fff; margin-top:2px;">Purple surge</div>
+      <div class="scale-desc">Legendary</div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  Same structure, same branding — the color, glow, and quote intensity all respond to the actual improvement number.<br>
+  Small wins still look good. Big wins look unforgettable.
+</div>
+
+</body>
+</html>
