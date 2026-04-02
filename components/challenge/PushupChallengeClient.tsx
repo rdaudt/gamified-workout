@@ -24,7 +24,7 @@ import type { Database, Tables } from '@/lib/supabase/database.types'
 import { hasSupabasePublicEnv } from '@/lib/supabase/env'
 import type { WorkoutAttributionSnapshot } from '@/lib/types/domain'
 
-type SessionStatus = 'idle' | 'live' | 'paused' | 'complete'
+type SessionStatus = 'idle' | 'countdown' | 'live' | 'paused' | 'complete'
 type CameraStatus = 'idle' | 'requesting' | 'ready' | 'error'
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'guest' | 'error'
 type PoseConnection = { start: number; end: number }
@@ -61,10 +61,11 @@ export function PushupChallengeClient() {
   const drawingUtilsRef = useRef<DrawingUtils | null>(null)
   const poseConnectionsRef = useRef<PoseConnection[]>([])
   const animationFrameRef = useRef<number | null>(null)
+  const countdownTimerRef = useRef<number | null>(null)
   const lastVideoTimeRef = useRef(-1)
   const sessionStatusRef = useRef<SessionStatus>('idle')
   const counterStateRef = useRef<PushupCounterState>(initialPushupCounterState)
-  const sessionStartMsRef = useRef<number | null>(null)
+  const challengeStartMsRef = useRef<number | null>(null)
   const pauseStartedAtRef = useRef<number | null>(null)
   const pausedMsRef = useRef(0)
   const sessionOccurredAtRef = useRef<string | null>(null)
@@ -93,11 +94,12 @@ export function PushupChallengeClient() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [viewerLabel, setViewerLabel] = useState('Guest challenger')
+  const [countdownValue, setCountdownValue] = useState<number | null>(null)
   const [branding, setBranding] = useState<WorkoutAttributionSnapshot>(
     viewerContextRef.current.attribution
   )
 
-  const canStart = cameraStatus === 'ready' && sessionStatus !== 'live'
+  const canStart = cameraStatus === 'ready' && sessionStatus === 'idle'
   const accentStyle = useMemo(
     () => ({ boxShadow: `0 0 0 1px ${branding.accentColor}33 inset` }),
     [branding.accentColor]
@@ -185,6 +187,7 @@ export function PushupChallengeClient() {
 
     return () => {
       cancelled = true
+      stopCountdown()
       stopAnimationLoop()
       stopCameraStream()
       poseLandmarkerRef.current?.close()
@@ -192,6 +195,32 @@ export function PushupChallengeClient() {
       drawingUtilsRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    if (sessionStatus !== 'countdown') {
+      stopCountdown()
+      setCountdownValue(null)
+
+      return
+    }
+
+    setCountdownValue(3)
+    countdownTimerRef.current = window.setInterval(() => {
+      setCountdownValue((currentValue) => {
+        if (currentValue === null || currentValue <= 1) {
+          stopCountdown()
+          sessionStatusRef.current = 'live'
+          setSessionStatus('live')
+
+          return null
+        }
+
+        return currentValue - 1
+      })
+    }, 1000)
+
+    return stopCountdown
+  }, [sessionStatus])
 
   async function enableCamera() {
     if (cameraStatus === 'requesting' || cameraStatus === 'ready') {
@@ -260,13 +289,13 @@ export function PushupChallengeClient() {
 
   function startSession() {
     counterStateRef.current = initialPushupCounterState
-    sessionStartMsRef.current = performance.now()
+    challengeStartMsRef.current = null
     pauseStartedAtRef.current = null
     pausedMsRef.current = 0
-    sessionOccurredAtRef.current = new Date().toISOString()
+    sessionOccurredAtRef.current = null
     elapsedSecondsRef.current = 0
-    sessionStatusRef.current = 'live'
-    setSessionStatus('live')
+    sessionStatusRef.current = 'countdown'
+    setSessionStatus('countdown')
     setRepCount(0)
     setElapsedSeconds(0)
     setTrackingScore(0)
@@ -365,9 +394,10 @@ export function PushupChallengeClient() {
   }
 
   function resetSession() {
+    stopCountdown()
     sessionStatusRef.current = 'idle'
     counterStateRef.current = initialPushupCounterState
-    sessionStartMsRef.current = null
+    challengeStartMsRef.current = null
     pauseStartedAtRef.current = null
     pausedMsRef.current = 0
     sessionOccurredAtRef.current = null
@@ -379,6 +409,7 @@ export function PushupChallengeClient() {
     setBodyHeight(1)
     setSaveStatus('idle')
     setSaveMessage(null)
+    setCountdownValue(null)
   }
 
   function cancelChallenge() {
@@ -484,15 +515,7 @@ export function PushupChallengeClient() {
       context.clearRect(0, 0, canvas.width, canvas.height)
 
       const now = performance.now()
-
-      if (sessionStatusRef.current === 'live') {
-        const nextElapsedSeconds = computeElapsedSeconds()
-
-        if (nextElapsedSeconds !== elapsedSecondsRef.current) {
-          elapsedSecondsRef.current = nextElapsedSeconds
-          setElapsedSeconds(nextElapsedSeconds)
-        }
-      }
+      let analysis: ReturnType<typeof analyzePushupLandmarks> | null = null
 
       if (video.readyState >= 2 && video.currentTime !== lastVideoTimeRef.current) {
         lastVideoTimeRef.current = video.currentTime
@@ -509,15 +532,16 @@ export function PushupChallengeClient() {
             radius: 3,
           })
 
-          const analysis = analyzePushupLandmarks(landmarks as PosePoint[])
+          analysis = analyzePushupLandmarks(landmarks as PosePoint[])
 
           if (analysis) {
-            setBodyHeight((current) => current * 0.7 + analysis.bodyHeight * 0.3)
+            const nextAnalysis = analysis
+            setBodyHeight((current) => current * 0.7 + nextAnalysis.bodyHeight * 0.3)
 
             if (sessionStatusRef.current === 'live') {
               const update = updatePushupCounter(
                 counterStateRef.current,
-                analysis,
+                nextAnalysis,
                 defaultPushupThresholds
               )
 
@@ -530,6 +554,26 @@ export function PushupChallengeClient() {
                 setRepCount(update.nextState.reps)
               }
             }
+          }
+        }
+      }
+
+      if (sessionStatusRef.current === 'live') {
+        if (
+          challengeStartMsRef.current === null &&
+          analysis?.isConfident &&
+          analysis.averageElbowAngle <= defaultPushupThresholds.downAngle
+        ) {
+          challengeStartMsRef.current = performance.now()
+          sessionOccurredAtRef.current = new Date().toISOString()
+        }
+
+        if (challengeStartMsRef.current !== null) {
+          const nextElapsedSeconds = computeElapsedSeconds()
+
+          if (nextElapsedSeconds !== elapsedSecondsRef.current) {
+            elapsedSecondsRef.current = nextElapsedSeconds
+            setElapsedSeconds(nextElapsedSeconds)
           }
         }
       }
@@ -547,13 +591,20 @@ export function PushupChallengeClient() {
     }
   }
 
+  function stopCountdown() {
+    if (countdownTimerRef.current !== null) {
+      window.clearInterval(countdownTimerRef.current)
+      countdownTimerRef.current = null
+    }
+  }
+
   function stopCameraStream() {
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
   }
 
   function computeElapsedSeconds() {
-    if (!sessionStartMsRef.current) {
+    if (!challengeStartMsRef.current) {
       return elapsedSecondsRef.current
     }
 
@@ -565,7 +616,7 @@ export function PushupChallengeClient() {
 
     return Math.max(
       0,
-      Math.round((now - sessionStartMsRef.current - pausedMsRef.current - activePauseMs) / 1000)
+      Math.round((now - challengeStartMsRef.current - pausedMsRef.current - activePauseMs) / 1000)
     )
   }
 
@@ -588,6 +639,16 @@ export function PushupChallengeClient() {
             <div className="pointer-events-none absolute left-4 top-4 rounded-full bg-black/45 px-3 py-1 text-[11px] uppercase tracking-[0.25em] text-accentSoft">
               Front camera / portrait
             </div>
+            {countdownValue !== null ? (
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/28">
+                <div className="rounded-[1.75rem] border border-white/20 bg-black/45 px-8 py-6 text-center shadow-glow">
+                  <p className="text-xs uppercase tracking-[0.32em] text-accentSoft">
+                    Get ready
+                  </p>
+                  <p className="mt-3 font-display text-7xl text-ink">{countdownValue}</p>
+                </div>
+              </div>
+            ) : null}
             <div className="absolute bottom-4 right-3 flex h-[58%] w-6 items-end rounded-full border border-line bg-canvas/60 p-1">
               <div className="relative w-full rounded-full bg-panelAlt">
                 <div
@@ -628,12 +689,12 @@ export function PushupChallengeClient() {
                 </button>
               )}
 
-              {canStart && sessionStatus !== 'complete' && (
+              {canStart && (
                 <button
                   onClick={startSession}
                   className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-canvas"
                 >
-                  Start challenge
+                  Get ready
                 </button>
               )}
 
@@ -692,6 +753,16 @@ export function PushupChallengeClient() {
 
             {cameraError ? (
               <p className="mt-3 text-sm text-accentSoft">{cameraError}</p>
+            ) : sessionStatus === 'countdown' ? (
+              <p className="mt-3 text-sm text-ink/68">
+                Countdown is live. The timer will begin only when the first valid pushup
+                motion starts.
+              </p>
+            ) : sessionStatus === 'live' && challengeStartMsRef.current === null ? (
+              <p className="mt-3 text-sm text-ink/68">
+                Hold your setup. Elapsed time stays at zero until the first valid pushup
+                descent is detected.
+              </p>
             ) : (
               <p className="mt-3 text-sm text-ink/68">
                 Prop the phone low in front of you, stay centered, and let the body-height
