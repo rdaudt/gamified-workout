@@ -22,8 +22,8 @@ const config: Config = {
         glow: '0 24px 80px rgba(240, 109, 79, 0.18)',
       },
       fontFamily: {
-        display: ['Georgia', 'serif'],
-        body: ['Segoe UI', 'sans-serif'],
+        display: ['Impact', 'Haettenschweiler', 'Arial Narrow Bold', 'sans-serif'],
+        body: ['Segoe UI', 'Trebuchet MS', 'sans-serif'],
       },
     },
   },

@@ -1,7 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PoseLandmarker } from '@mediapipe/tasks-vision'
+import {
+  buildSponsorShareText,
+  sponsorBusinessName,
+  sponsorCardFilename,
+  sponsorChallengeTitle,
+  sponsorCoachName,
+  sponsorLogoPath,
+  sponsorVideoFilenameBase,
+} from '@/lib/challenge/campaign'
 import { createResultCardBlob } from '@/lib/challenge/result-card'
 import {
   analyzePushupLandmarks,
@@ -26,7 +35,6 @@ import {
   type SessionVideoStatus,
 } from '@/lib/challenge/session-video'
 import { createWorkoutAttributionSnapshot } from '@/lib/platform/branding'
-import { getExerciseById } from '@/lib/platform/exercises'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
 import type { Database, Tables } from '@/lib/supabase/database.types'
 import { hasSupabasePublicEnv } from '@/lib/supabase/env'
@@ -35,6 +43,7 @@ import type { WorkoutAttributionSnapshot } from '@/lib/types/domain'
 type SessionStatus = SessionVideoStatus
 type CameraStatus = 'idle' | 'requesting' | 'ready' | 'error'
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'guest' | 'error'
+type ActiveTab = 'challenge' | 'share'
 
 interface ViewerContext {
   userId: string | null
@@ -52,7 +61,6 @@ type CoachBrandingPreview = Pick<
 >
 type WorkoutInsert = Database['public']['Tables']['workouts']['Insert']
 
-const exercise = getExerciseById('push-ups')
 const wasmPath =
   'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm'
 const modelAssetPath =
@@ -69,6 +77,7 @@ export function PushupChallengeClient() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
   const recordedVideoUrlRef = useRef<string | null>(null)
+  const cardPreviewUrlRef = useRef<string | null>(null)
   const recordingFormatRef = useRef<RecordingFormat | null>(null)
   const stopRecordingResolverRef = useRef<(() => void) | null>(null)
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null)
@@ -111,17 +120,16 @@ export function PushupChallengeClient() {
   const [viewerLabel, setViewerLabel] = useState('Guest challenger')
   const [countdownValue, setCountdownValue] = useState<number | null>(null)
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null)
+  const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null)
   const [recordingFormatLabel, setRecordingFormatLabel] = useState<'MP4' | 'WebM'>('MP4')
   const [recordingMessage, setRecordingMessage] = useState<string | null>(null)
   const [branding, setBranding] = useState<WorkoutAttributionSnapshot>(
     viewerContextRef.current.attribution
   )
+  const [activeTab, setActiveTab] = useState<ActiveTab>('challenge')
 
   const canStart = cameraStatus === 'ready' && sessionStatus === 'idle'
-  const accentStyle = useMemo(
-    () => ({ boxShadow: `0 0 0 1px ${branding.accentColor}33 inset` }),
-    [branding.accentColor]
-  )
+  const shareReady = sessionStatus === 'complete' && repCount > 0
 
   useEffect(() => {
     let cancelled = false
@@ -210,6 +218,7 @@ export function PushupChallengeClient() {
       stopAnimationLoop()
       stopCameraStream()
       clearRecordedVideo()
+      clearCardPreview()
       poseLandmarkerRef.current?.close()
       poseLandmarkerRef.current = null
       compositionCanvasRef.current = null
@@ -249,6 +258,39 @@ export function PushupChallengeClient() {
 
     return stopCountdown
   }, [sessionStatus])
+
+  useEffect(() => {
+    if (!shareReady) {
+      clearCardPreview()
+      setActiveTab('challenge')
+
+      return
+    }
+
+    let cancelled = false
+
+    async function loadCardPreview() {
+      try {
+        const blob = await createCardBlob()
+
+        if (cancelled) {
+          return
+        }
+
+        updateCardPreviewUrl(URL.createObjectURL(blob))
+      } catch {
+        if (!cancelled) {
+          clearCardPreview()
+        }
+      }
+    }
+
+    loadCardPreview()
+
+    return () => {
+      cancelled = true
+    }
+  }, [shareReady, repCount, elapsedSeconds, branding])
 
   async function enableCamera() {
     if (cameraStatus === 'requesting' || cameraStatus === 'ready') {
@@ -448,6 +490,7 @@ export function PushupChallengeClient() {
     setRecordingMessage(null)
     setRecordingFormatLabel('MP4')
     clearRecordedVideo()
+    clearCardPreview()
   }
 
   function cancelChallenge() {
@@ -619,6 +662,19 @@ export function PushupChallengeClient() {
     updateRecordedVideoUrl(null)
   }
 
+  function updateCardPreviewUrl(url: string | null) {
+    if (cardPreviewUrlRef.current) {
+      URL.revokeObjectURL(cardPreviewUrlRef.current)
+    }
+
+    cardPreviewUrlRef.current = url
+    setCardPreviewUrl(url)
+  }
+
+  function clearCardPreview() {
+    updateCardPreviewUrl(null)
+  }
+
   function getOrCreateCompositionCanvas() {
     if (!compositionCanvasRef.current) {
       compositionCanvasRef.current = document.createElement('canvas')
@@ -649,7 +705,7 @@ export function PushupChallengeClient() {
 
     const anchor = document.createElement('a')
     anchor.href = recordedVideoUrl
-    anchor.download = `beat-past-you-session-video.${
+    anchor.download = `${sponsorVideoFilenameBase}.${
       recordingFormatRef.current?.extension ??
       (recordingFormatLabel === 'MP4' ? 'mp4' : 'webm')
     }`
@@ -659,13 +715,13 @@ export function PushupChallengeClient() {
   async function shareResult() {
     try {
       const blob = await createCardBlob()
-      const file = new File([blob], 'beat-past-you-pushup-result.png', {
+      const file = new File([blob], sponsorCardFilename, {
         type: 'image/png',
       })
       const shareData = {
         files: [file],
-        title: 'Beat Past You result',
-        text: `I logged ${repCount} pushups in ${formatDuration(elapsedSeconds)} on Beat Past You.`,
+        title: `${sponsorCoachName} ${sponsorChallengeTitle}`,
+        text: buildSponsorShareText(repCount, elapsedSeconds),
       }
 
       if (navigator.canShare?.(shareData)) {
@@ -692,14 +748,14 @@ export function PushupChallengeClient() {
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = 'beat-past-you-pushup-result.png'
+    anchor.download = sponsorCardFilename
     anchor.click()
     URL.revokeObjectURL(url)
   }
 
   async function createCardBlob() {
     return createResultCardBlob({
-      title: 'Pushup challenge',
+      title: sponsorChallengeTitle,
       exercise: 'push-ups',
       reps: repCount,
       durationSeconds: elapsedSecondsRef.current || elapsedSeconds,
@@ -868,279 +924,430 @@ export function PushupChallengeClient() {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
-      <section className="rounded-[2rem] border border-line bg-panel p-4 shadow-glow">
-        <div className="rounded-[1.75rem] border border-line bg-canvas/80 p-3">
-          <div className="relative overflow-hidden rounded-[1.5rem] border border-line bg-black">
-            <video
-              ref={videoRef}
-              autoPlay
-              muted
-              playsInline
-              className="aspect-[3/4] w-full scale-x-[-1] object-cover"
-            />
-            <canvas
-              ref={overlayRef}
-              className="pointer-events-none absolute inset-0 h-full w-full scale-x-[-1]"
-            />
-            <div className="pointer-events-none absolute left-4 top-4 rounded-full bg-black/45 px-3 py-1 text-[11px] uppercase tracking-[0.25em] text-accentSoft">
-              Front camera / portrait
-            </div>
-            {countdownValue !== null ? (
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/28">
-                <div className="rounded-[1.75rem] border border-white/20 bg-black/45 px-8 py-6 text-center shadow-glow">
-                  <p className="text-xs uppercase tracking-[0.32em] text-accentSoft">
-                    Get ready
-                  </p>
-                  <p className="mt-3 font-display text-7xl text-ink">{countdownValue}</p>
+    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(80,145,255,0.24),_transparent_28%),radial-gradient(circle_at_bottom,_rgba(255,128,72,0.16),_transparent_28%),linear-gradient(180deg,_#04070d_0%,_#091523_45%,_#050910_100%)] px-3 py-4 sm:px-6 sm:py-10">
+      <div className="mx-auto flex max-w-6xl justify-center">
+        <div className="w-full max-w-[420px] sm:max-w-[470px] sm:rounded-[3.3rem] sm:border sm:border-[#2f4259] sm:bg-[#d7dee8]/10 sm:p-3 sm:shadow-[0_30px_100px_rgba(4,8,18,0.65)]">
+          <section className="relative overflow-hidden rounded-[2.7rem] border border-white/10 bg-[#07111d] text-[#f7f3ea] shadow-[0_30px_80px_rgba(0,0,0,0.55)]">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_18%,_rgba(77,152,255,0.26),_transparent_22%),radial-gradient(circle_at_86%_12%,_rgba(255,126,81,0.22),_transparent_18%),linear-gradient(180deg,_rgba(17,38,62,0.88)_0%,_rgba(8,16,28,0.95)_55%,_rgba(5,10,18,1)_100%)]" />
+            <div className="absolute inset-x-[24%] top-0 hidden h-7 rounded-b-[1.35rem] border-x border-b border-white/10 bg-[#0f1f31] sm:block" />
+            <div className="relative z-10 p-4 sm:p-5">
+              <header className="rounded-[1.9rem] border border-white/10 bg-[linear-gradient(135deg,_rgba(255,255,255,0.08),_rgba(255,255,255,0.02))] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-20 w-24 items-center justify-center rounded-[1.4rem] border border-white/10 bg-[linear-gradient(180deg,_rgba(255,255,255,0.08),_rgba(2,6,14,0.25))] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                    <img
+                      src={sponsorLogoPath}
+                      alt={sponsorBusinessName}
+                      className="max-h-full w-full object-contain"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[0.7rem] font-semibold uppercase tracking-[0.34em] text-[#9cc8ff]">
+                      {sponsorCoachName}
+                    </p>
+                    <h1 className="mt-1 font-display text-[2.35rem] uppercase leading-[0.9] tracking-[0.02em] text-[#eff4ff] sm:text-[2.8rem]">
+                      {sponsorChallengeTitle}
+                    </h1>
+                    <p className="mt-2 max-w-[18rem] text-xs uppercase tracking-[0.24em] text-[#ffd5b6]/85">
+                      Strength. power. fun. built to be shared fast.
+                    </p>
+                  </div>
                 </div>
+              </header>
+
+              <div className="mt-4 flex gap-2 rounded-[1.6rem] border border-white/10 bg-[#09192a]/75 p-2">
+                <TabButton
+                  active={activeTab === 'challenge'}
+                  disabled={false}
+                  onClick={() => setActiveTab('challenge')}
+                >
+                  Challenge yourself
+                </TabButton>
+                <TabButton
+                  active={activeTab === 'share'}
+                  disabled={!shareReady}
+                  onClick={() => {
+                    if (shareReady) {
+                      setActiveTab('share')
+                    }
+                  }}
+                >
+                  Share
+                </TabButton>
               </div>
-            ) : null}
-            <div className="absolute bottom-4 right-3 flex h-[58%] w-6 items-end rounded-full border border-line bg-canvas/60 p-1">
-              <div className="relative w-full rounded-full bg-panelAlt">
-                <div
-                  className="absolute inset-x-0 h-8 rounded-full border border-canvas bg-signal transition-[bottom]"
-                  style={{ bottom: `${bodyHeight * 100}%` }}
-                />
-                <div className="h-48 rounded-full bg-gradient-to-t from-[#143846] to-[#244a57]" />
-              </div>
+
+              {activeTab === 'challenge' ? (
+                <div className="mt-4 space-y-4">
+                  <div className="rounded-[2rem] border border-[#28476c] bg-[linear-gradient(180deg,_rgba(8,18,30,0.92),_rgba(8,17,27,0.98))] p-3 shadow-[0_24px_60px_rgba(0,0,0,0.35)]">
+                    <div className="relative overflow-hidden rounded-[1.6rem] border border-[#2e4b6e] bg-black shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        muted
+                        playsInline
+                        className="aspect-[3/4] w-full scale-x-[-1] object-cover"
+                      />
+                      <canvas
+                        ref={overlayRef}
+                        className="pointer-events-none absolute inset-0 h-full w-full scale-x-[-1]"
+                      />
+                      <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/10 bg-[#07111d]/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-[#9cc8ff]">
+                        {sponsorBusinessName}
+                      </div>
+                      <div className="pointer-events-none absolute right-3 top-3 rounded-full border border-[#2f547c] bg-[#0d2035]/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#ffd5b6]">
+                        Front camera / portrait
+                      </div>
+                      {countdownValue !== null ? (
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[#02050bcc]">
+                          <div className="rounded-[1.9rem] border border-white/10 bg-[#081525]/82 px-10 py-7 text-center shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.34em] text-[#9cc8ff]">
+                              Get ready
+                            </p>
+                            <p className="mt-3 font-display text-7xl leading-none text-[#fff4e8]">
+                              {countdownValue}
+                            </p>
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="absolute bottom-4 right-3 flex h-[58%] w-6 items-end rounded-full border border-[#2f547c] bg-[#07111d]/70 p-1 shadow-[0_12px_30px_rgba(0,0,0,0.35)]">
+                        <div className="relative w-full rounded-full bg-[#0d2035]">
+                          <div
+                            className="absolute inset-x-0 h-8 rounded-full border border-[#e9f6ff] bg-[#4aa9ff] transition-[bottom]"
+                            style={{ bottom: `${bodyHeight * 100}%` }}
+                          />
+                          <div className="h-48 rounded-full bg-gradient-to-t from-[#123c67] to-[#2d7de0]" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-3">
+                      <MicrositeStat label="Reps" value={repCount.toString()} accent="signal" />
+                      <MicrositeStat
+                        label="Elapsed"
+                        value={formatDuration(elapsedSeconds)}
+                        accent="accent"
+                      />
+                      <MicrositeStat
+                        label="Tracking"
+                        value={`${trackingScore}%`}
+                        accent="ink"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-[2rem] border border-white/10 bg-[#09192a]/88 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.25)]">
+                    <div className="grid grid-cols-2 gap-3">
+                      {(cameraStatus === 'idle' || cameraStatus === 'error') && (
+                        <ActionButton
+                          onClick={enableCamera}
+                          variant="primary"
+                          className="col-span-2"
+                        >
+                          {cameraStatus === 'error' ? 'Try camera again' : 'Enable camera'}
+                        </ActionButton>
+                      )}
+
+                      {cameraStatus === 'requesting' && (
+                        <ActionButton disabled variant="primary" className="col-span-2">
+                          Connecting camera...
+                        </ActionButton>
+                      )}
+
+                      {canStart && (
+                        <ActionButton onClick={startSession} variant="primary">
+                          Get ready
+                        </ActionButton>
+                      )}
+
+                      {sessionStatus === 'live' && (
+                        <>
+                          <ActionButton onClick={pauseSession} variant="secondary">
+                            Pause
+                          </ActionButton>
+                          <ActionButton onClick={stopSession} variant="outline">
+                            Stop
+                          </ActionButton>
+                        </>
+                      )}
+
+                      {sessionStatus === 'paused' && (
+                        <>
+                          <ActionButton onClick={resumeSession} variant="primary">
+                            Resume
+                          </ActionButton>
+                          <ActionButton onClick={stopSession} variant="outline">
+                            Finish
+                          </ActionButton>
+                        </>
+                      )}
+
+                      {sessionStatus === 'complete' && (
+                        <>
+                          <ActionButton
+                            onClick={() => setActiveTab('share')}
+                            variant="primary"
+                            disabled={!shareReady}
+                          >
+                            Open share
+                          </ActionButton>
+                          <ActionButton onClick={resetSession} variant="secondary">
+                            New challenge
+                          </ActionButton>
+                        </>
+                      )}
+
+                      {cameraStatus === 'ready' && sessionStatus !== 'complete' && (
+                        <ActionButton
+                          onClick={cancelChallenge}
+                          variant="ghost"
+                          className="col-span-2"
+                        >
+                          Cancel challenge
+                        </ActionButton>
+                      )}
+                    </div>
+
+                    <div className="mt-4 rounded-[1.5rem] border border-[#1f3955] bg-[#071523] px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#9cc8ff]">
+                        Arena status
+                      </p>
+                      {cameraError ? (
+                        <p className="mt-2 text-sm text-[#ffbca5]">{cameraError}</p>
+                      ) : sessionStatus === 'countdown' ? (
+                        <p className="mt-2 text-sm text-[#d7e3f8]/78">
+                          Countdown is live. Timing starts only when the first valid pushup
+                          motion is detected.
+                        </p>
+                      ) : sessionStatus === 'live' && challengeStartMsRef.current === null ? (
+                        <p className="mt-2 text-sm text-[#d7e3f8]/78">
+                          Hold your setup. Stay centered and let the counter arm off your
+                          first descent.
+                        </p>
+                      ) : shareReady ? (
+                        <p className="mt-2 text-sm text-[#d7e3f8]/78">
+                          Session complete. Your share card and session video are ready in the
+                          Share tab.
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-sm text-[#d7e3f8]/78">
+                          Prop the phone low, keep your whole upper body in frame, and let the
+                          rail echo your depth live.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="mt-4 grid gap-3 text-sm text-[#d7e3f8]/78">
+                      <div className="rounded-[1.35rem] border border-white/8 bg-white/5 px-4 py-3">
+                        Pose overlay and elevator stay visible so testers can trust what was
+                        captured.
+                      </div>
+                      <div className="rounded-[1.35rem] border border-white/8 bg-white/5 px-4 py-3">
+                        The share tab unlocks after a completed result with reps and elapsed
+                        time.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 space-y-4">
+                  <div className="rounded-[2rem] border border-[#28476c] bg-[linear-gradient(180deg,_rgba(8,18,30,0.92),_rgba(8,17,27,0.98))] p-4 shadow-[0_24px_60px_rgba(0,0,0,0.35)]">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#9cc8ff]">
+                          Share artifact
+                        </p>
+                        <h2 className="mt-2 font-display text-3xl uppercase leading-none text-[#f7f3ea]">
+                          Card first
+                        </h2>
+                      </div>
+                      <div className="rounded-full border border-[#2f547c] bg-[#0d2035]/85 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-[#ffd5b6]">
+                        {viewerLabel}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-[1.7rem] border border-[#355678] bg-[#06111d] p-3">
+                      <div className="overflow-hidden rounded-[1.4rem] border border-white/8 bg-[linear-gradient(180deg,_rgba(16,31,53,0.92),_rgba(6,12,20,1))]">
+                        {cardPreviewUrl ? (
+                          <img
+                            src={cardPreviewUrl}
+                            alt="Pushup challenge result card"
+                            className="aspect-[9/16] w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex aspect-[9/16] items-center justify-center px-8 text-center text-sm text-[#d7e3f8]/72">
+                            Finish a challenge to unlock the branded result card preview.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      <ActionButton
+                        onClick={shareResult}
+                        disabled={!shareReady}
+                        variant="primary"
+                        className="w-full"
+                      >
+                        Share card
+                      </ActionButton>
+                      <ActionButton
+                        onClick={downloadResult}
+                        disabled={!shareReady}
+                        variant="secondary"
+                        className="w-full"
+                      >
+                        Download card
+                      </ActionButton>
+                      <ActionButton
+                        onClick={downloadSessionVideo}
+                        disabled={!shareReady || !recordedVideoUrl}
+                        variant="secondary"
+                        className="w-full"
+                      >
+                        {`Download session video (${recordingFormatLabel})`}
+                      </ActionButton>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[2rem] border border-white/10 bg-[#09192a]/88 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.25)]">
+                    <div className="grid gap-3">
+                      <ShareInfoCard
+                        label="Brand"
+                        value={`${sponsorCoachName} x ${sponsorBusinessName}`}
+                      />
+                      <ShareInfoCard
+                        label="Result"
+                        value={`${repCount} reps / ${formatDuration(elapsedSeconds)}`}
+                      />
+                      <ShareInfoCard
+                        label="Session video"
+                        value={
+                          recordedVideoUrl
+                            ? `Ready to download as ${recordingFormatLabel}`
+                            : 'Generated after a completed run'
+                        }
+                      />
+                    </div>
+
+                    <p className="mt-4 text-sm text-[#d7e3f8]/78">
+                      Mobile sharing uses the system share sheet when available. Card is the
+                      hero artifact; the burned-in session video is the proof layer.
+                    </p>
+
+                    {saveMessage ? (
+                      <p
+                        className={`mt-3 text-sm ${
+                          saveStatus === 'error' ? 'text-[#ffbca5]' : 'text-[#9bdccf]'
+                        }`}
+                      >
+                        {saveMessage}
+                      </p>
+                    ) : null}
+
+                    {recordingMessage ? (
+                      <p className="mt-3 text-sm text-[#d7e3f8]/78">{recordingMessage}</p>
+                    ) : null}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-
-          <div
-            className="mt-4 rounded-[1.5rem] border border-line bg-panel p-4"
-            style={accentStyle}
-          >
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <StatTile label="Reps" value={repCount.toString()} />
-              <StatTile label="Elapsed" value={formatDuration(elapsedSeconds)} />
-              <StatTile label="Tracking" value={`${trackingScore}%`} />
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-3">
-              {(cameraStatus === 'idle' || cameraStatus === 'error') && (
-                <button
-                  onClick={enableCamera}
-                  className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-canvas"
-                >
-                  {cameraStatus === 'error' ? 'Try camera again' : 'Enable front camera'}
-                </button>
-              )}
-
-              {cameraStatus === 'requesting' && (
-                <button
-                  disabled
-                  className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-canvas/70"
-                >
-                  Connecting camera...
-                </button>
-              )}
-
-              {canStart && (
-                <button
-                  onClick={startSession}
-                  className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-canvas"
-                >
-                  Get ready
-                </button>
-              )}
-
-              {sessionStatus === 'live' && (
-                <>
-                  <button
-                    onClick={pauseSession}
-                    className="rounded-full border border-line px-4 py-2 text-sm text-ink/75"
-                  >
-                    Pause
-                  </button>
-                  <button
-                    onClick={stopSession}
-                    className="rounded-full border border-accent px-4 py-2 text-sm text-accentSoft"
-                  >
-                    Stop
-                  </button>
-                </>
-              )}
-
-              {sessionStatus === 'paused' && (
-                <>
-                  <button
-                    onClick={resumeSession}
-                    className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-canvas"
-                  >
-                    Resume
-                  </button>
-                  <button
-                    onClick={stopSession}
-                    className="rounded-full border border-accent px-4 py-2 text-sm text-accentSoft"
-                  >
-                    Finish
-                  </button>
-                </>
-              )}
-
-              {sessionStatus === 'complete' && (
-                <button
-                  onClick={resetSession}
-                  className="rounded-full border border-line px-4 py-2 text-sm text-ink/75"
-                >
-                  Reset
-                </button>
-              )}
-
-              {cameraStatus === 'ready' && (
-                <button
-                  onClick={cancelChallenge}
-                  className="rounded-full border border-line px-4 py-2 text-sm text-ink/75"
-                >
-                  Cancel challenge
-                </button>
-              )}
-            </div>
-
-            {cameraError ? (
-              <p className="mt-3 text-sm text-accentSoft">{cameraError}</p>
-            ) : sessionStatus === 'countdown' ? (
-              <p className="mt-3 text-sm text-ink/68">
-                Countdown is live. The timer will begin only when the first valid pushup
-                motion starts.
-              </p>
-            ) : sessionStatus === 'live' && challengeStartMsRef.current === null ? (
-              <p className="mt-3 text-sm text-ink/68">
-                Hold your setup. Elapsed time stays at zero until the first valid pushup
-                descent is detected.
-              </p>
-            ) : (
-              <p className="mt-3 text-sm text-ink/68">
-                Prop the phone low in front of you, stay centered, and let the body-height
-                rail echo your pushup depth live.
-              </p>
-            )}
-          </div>
+          </section>
         </div>
-      </section>
-
-      <section className="grid gap-4">
-        <article className="rounded-[2rem] border border-line bg-panel p-6 shadow-glow">
-          <p className="text-xs uppercase tracking-[0.3em] text-accentSoft">
-            {exercise.name}
-          </p>
-          <h2 className="mt-3 font-display text-4xl leading-tight">
-            Challenge yourself first. Share it before the moment cools off.
-          </h2>
-          <p className="mt-4 text-sm text-ink/72">
-            Beat Past You is tuned for portrait, front-camera pushup sessions that stay
-            quick, visual, and easy to share. Reps and elapsed time are the core signal.
-          </p>
-          <div className="mt-5 grid gap-3 text-sm text-ink/75">
-            <div className="rounded-2xl bg-panelAlt px-4 py-3">
-              Pose overlay tracks the challenge in real time.
-            </div>
-            <div className="rounded-2xl bg-panelAlt px-4 py-3">
-              Guests can finish and share instantly with no account required.
-            </div>
-            <div className="rounded-2xl bg-panelAlt px-4 py-3">
-              Signed-in challengers save sessions and coach branding snapshots automatically.
-            </div>
-          </div>
-        </article>
-
-        <article className="rounded-[2rem] border border-line bg-panel p-6 shadow-glow">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-signal">Result card</p>
-              <h2 className="mt-2 font-display text-3xl">Share-ready by default</h2>
-            </div>
-            <div className="rounded-full border border-line bg-panelAlt px-3 py-1 text-xs text-ink/70">
-              {viewerLabel}
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-[1.75rem] border border-line bg-[#0d1725] p-5">
-            <div className="rounded-[1.35rem] border border-line bg-gradient-to-b from-[#101f30] to-[#0b1521] p-5">
-              <p className="text-xs uppercase tracking-[0.3em] text-accentSoft">
-                Beat Past You
-              </p>
-              <h3 className="mt-4 font-display text-6xl text-ink">{repCount}</h3>
-              <p className="mt-2 text-sm uppercase tracking-[0.28em] text-signal">
-                pushups logged
-              </p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <MetricCard label="Elapsed" value={formatDuration(elapsedSeconds)} />
-                <MetricCard
-                  label="Branding"
-                  value={
-                    branding.brandingSource === 'coach'
-                      ? branding.coachDisplayName ?? 'Current coach'
-                      : 'Beat Past You'
-                  }
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-3">
-            <button
-              onClick={shareResult}
-              disabled={sessionStatus !== 'complete'}
-              className="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-canvas disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Share
-            </button>
-            <button
-              onClick={downloadResult}
-              disabled={sessionStatus !== 'complete'}
-              className="rounded-full border border-line px-4 py-2 text-sm text-ink/75 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Download
-            </button>
-            <button
-              onClick={downloadSessionVideo}
-              disabled={sessionStatus !== 'complete' || !recordedVideoUrl}
-              className="rounded-full border border-line px-4 py-2 text-sm text-ink/75 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {`Download session video (${recordingFormatLabel})`}
-            </button>
-          </div>
-
-          <p className="mt-3 text-sm text-ink/68">
-            Share uses the mobile system share sheet when available. Direct Instagram posting
-            stays out of scope for this release.
-          </p>
-
-          {saveMessage ? (
-            <p
-              className={`mt-3 text-sm ${
-                saveStatus === 'error' ? 'text-accentSoft' : 'text-signal'
-              }`}
-            >
-              {saveMessage}
-            </p>
-          ) : null}
-
-          {recordingMessage ? (
-            <p className="mt-3 text-sm text-ink/68">{recordingMessage}</p>
-          ) : null}
-        </article>
-      </section>
+      </div>
     </div>
   )
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+function TabButton({
+  active,
+  disabled,
+  onClick,
+  children,
+}: {
+  active: boolean
+  disabled: boolean
+  onClick: () => void
+  children: string
+}) {
   return (
-    <div className="rounded-2xl bg-panelAlt px-3 py-4">
-      <p className="text-[11px] uppercase tracking-[0.28em] text-ink/45">{label}</p>
-      <p className="mt-2 font-display text-3xl text-ink">{value}</p>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex-1 rounded-[1.2rem] px-4 py-3 text-sm font-semibold transition ${
+        active
+          ? 'bg-[linear-gradient(135deg,#f17f51,#f0b368)] text-[#08131f] shadow-[0_10px_26px_rgba(241,127,81,0.34)]'
+          : 'border border-white/10 bg-white/5 text-[#d7e3f8]/82'
+      } disabled:cursor-not-allowed disabled:opacity-35`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function ActionButton({
+  children,
+  className = '',
+  disabled = false,
+  onClick,
+  variant,
+}: {
+  children: string
+  className?: string
+  disabled?: boolean
+  onClick?: () => void
+  variant: 'primary' | 'secondary' | 'outline' | 'ghost'
+}) {
+  const base =
+    'rounded-[1.2rem] px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45'
+  const variants = {
+    primary:
+      'bg-[linear-gradient(135deg,#f17f51,#f2bb64)] text-[#08131f] shadow-[0_14px_30px_rgba(241,127,81,0.28)]',
+    secondary:
+      'border border-[#34587d] bg-[#0f2136] text-[#f5f0e9]',
+    outline:
+      'border border-[#f08a62] bg-transparent text-[#ffd5b6]',
+    ghost:
+      'border border-white/10 bg-white/5 text-[#d7e3f8]/82',
+  } as const
+
+  return (
+    <button onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${className}`}>
+      {children}
+    </button>
+  )
+}
+
+function MicrositeStat({
+  label,
+  value,
+  accent,
+}: {
+  label: string
+  value: string
+  accent: 'signal' | 'accent' | 'ink'
+}) {
+  const accentTone = {
+    signal: 'text-[#9bdccf]',
+    accent: 'text-[#ffd5b6]',
+    ink: 'text-[#eff4ff]',
+  } as const
+
+  return (
+    <div className="rounded-[1.4rem] border border-white/10 bg-[linear-gradient(180deg,_rgba(255,255,255,0.06),_rgba(255,255,255,0.02))] px-3 py-4 text-center">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#9fb6d7]/70">
+        {label}
+      </p>
+      <p className={`mt-2 font-display text-3xl uppercase ${accentTone[accent]}`}>{value}</p>
     </div>
   )
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+function ShareInfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-line bg-[#132336] px-4 py-4">
-      <p className="text-xs uppercase tracking-[0.28em] text-ink/45">{label}</p>
-      <p className="mt-3 font-display text-3xl text-ink">{value}</p>
+    <div className="rounded-[1.35rem] border border-[#1f3955] bg-[#071523] px-4 py-3">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#9cc8ff]">
+        {label}
+      </p>
+      <p className="mt-2 text-sm text-[#f7f3ea]">{value}</p>
     </div>
   )
 }
