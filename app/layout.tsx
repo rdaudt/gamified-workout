@@ -2,9 +2,9 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Beat Past You',
+  title: 'Coach Gabe Pushup Challenge',
   description:
-    'Social fitness challenge platform with pushup sessions, shareable result cards, coach discovery, and role-based surfaces.',
+    'Sponsor-led pushup challenge microsite for fast sessions, branded share cards, and session video exports.',
 }
 
 export default function RootLayout({

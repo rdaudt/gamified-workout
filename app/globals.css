@@ -18,10 +18,11 @@ body {
 
 body {
   background:
-    radial-gradient(circle at top, rgba(240, 109, 79, 0.2), transparent 30%),
-    linear-gradient(180deg, #081218 0%, #09161c 48%, #071015 100%);
+    radial-gradient(circle at top, rgba(96, 165, 250, 0.2), transparent 24%),
+    radial-gradient(circle at bottom, rgba(241, 127, 81, 0.14), transparent 24%),
+    linear-gradient(180deg, #04070d 0%, #091523 44%, #050910 100%);
   color: #f4efe7;
-  font-family: 'Segoe UI', sans-serif;
+  font-family: 'Segoe UI', 'Trebuchet MS', sans-serif;
 }
 
 a {

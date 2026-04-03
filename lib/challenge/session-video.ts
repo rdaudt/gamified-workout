@@ -1,3 +1,8 @@
+import {
+  sponsorBusinessName,
+  sponsorChallengeTitle,
+  sponsorCoachName,
+} from '@/lib/challenge/campaign'
 import { formatDuration, type PosePoint } from '@/lib/challenge/pushup'
 
 export type SessionVideoStatus = 'idle' | 'countdown' | 'live' | 'paused' | 'complete'
@@ -59,8 +64,8 @@ interface DrawComposedChallengeFrameOptions {
   connections: PoseConnection[]
 }
 
-const defaultConnectionColor = '#ff6b68'
-const defaultLandmarkColor = '#ffd1b0'
+const defaultConnectionColor = '#ff7a6b'
+const defaultLandmarkColor = '#ffd8bf'
 
 export function buildChallengeFrameSnapshot(
   options: BuildChallengeFrameSnapshotOptions
@@ -246,7 +251,7 @@ function drawFrameGradients(
   canvas: HTMLCanvasElement
 ) {
   const topGradient = context.createLinearGradient(0, 0, 0, canvas.height * 0.24)
-  topGradient.addColorStop(0, 'rgba(8, 14, 24, 0.72)')
+  topGradient.addColorStop(0, 'rgba(6, 13, 22, 0.78)')
   topGradient.addColorStop(1, 'rgba(8, 14, 24, 0)')
   context.fillStyle = topGradient
   context.fillRect(0, 0, canvas.width, canvas.height * 0.24)
@@ -257,7 +262,7 @@ function drawFrameGradients(
     0,
     canvas.height * 0.6
   )
-  bottomGradient.addColorStop(0, 'rgba(8, 14, 24, 0.88)')
+  bottomGradient.addColorStop(0, 'rgba(4, 10, 18, 0.92)')
   bottomGradient.addColorStop(1, 'rgba(8, 14, 24, 0)')
   context.fillStyle = bottomGradient
   context.fillRect(0, canvas.height * 0.6, canvas.width, canvas.height * 0.4)
@@ -272,14 +277,19 @@ function drawFrontCameraBadge(
   const width = canvas.width * 0.3
   const height = canvas.height * 0.055
 
-  context.fillStyle = 'rgba(0, 0, 0, 0.5)'
+  context.fillStyle = 'rgba(7, 17, 29, 0.72)'
   roundRect(context, paddingX, paddingY, width, height, height / 2)
   context.fill()
 
-  context.fillStyle = '#8ad1c2'
+  context.strokeStyle = 'rgba(76, 127, 186, 0.35)'
+  context.lineWidth = 2
+  roundRect(context, paddingX, paddingY, width, height, height / 2)
+  context.stroke()
+
+  context.fillStyle = '#9cc8ff'
   context.font = `600 ${Math.round(canvas.width * 0.026)}px Segoe UI`
   context.textBaseline = 'middle'
-  context.fillText('Front camera / portrait', paddingX + width * 0.11, paddingY + height / 2)
+  context.fillText(sponsorBusinessName, paddingX + width * 0.11, paddingY + height / 2)
 }
 
 function drawTrackingBadge(
@@ -292,11 +302,16 @@ function drawTrackingBadge(
   const x = canvas.width - width - canvas.width * 0.05
   const y = canvas.height * 0.055
 
-  context.fillStyle = 'rgba(10, 18, 30, 0.68)'
+  context.fillStyle = 'rgba(7, 17, 29, 0.72)'
   roundRect(context, x, y, width, height, height / 2)
   context.fill()
 
-  context.fillStyle = '#ffd1b0'
+  context.strokeStyle = 'rgba(76, 127, 186, 0.35)'
+  context.lineWidth = 2
+  roundRect(context, x, y, width, height, height / 2)
+  context.stroke()
+
+  context.fillStyle = '#ffd5b6'
   context.font = `600 ${Math.round(canvas.width * 0.023)}px Segoe UI`
   context.textAlign = 'center'
   context.textBaseline = 'middle'
@@ -316,19 +331,19 @@ function drawDebugPanel(
   const y = canvas.height * 0.13
   const height = headerHeight + rowHeight * 5 + canvas.height * 0.018
 
-  context.fillStyle = 'rgba(7, 16, 28, 0.72)'
+  context.fillStyle = 'rgba(7, 16, 28, 0.78)'
   roundRect(context, x, y, width, height, canvas.height * 0.018)
   context.fill()
 
-  context.strokeStyle = 'rgba(240, 109, 79, 0.28)'
+  context.strokeStyle = 'rgba(76, 127, 186, 0.28)'
   context.lineWidth = 2
   roundRect(context, x, y, width, height, canvas.height * 0.018)
   context.stroke()
 
-  context.fillStyle = '#f06d4f'
+  context.fillStyle = '#ffd5b6'
   context.font = `600 ${Math.round(canvas.width * 0.018)}px Segoe UI`
   context.textBaseline = 'top'
-  context.fillText('Counter debug', x + width * 0.08, y + canvas.height * 0.016)
+  context.fillText(`${sponsorChallengeTitle} telemetry`, x + width * 0.08, y + canvas.height * 0.016)
 
   const rows = [
     ['Phase', snapshot.counterPhaseLabel],
@@ -345,7 +360,7 @@ function drawDebugPanel(
       context.fillRect(x + width * 0.07, rowY - canvas.height * 0.006, width * 0.86, 1)
     }
 
-    context.fillStyle = '#8ad1c2'
+    context.fillStyle = '#9cc8ff'
     context.font = `600 ${Math.round(canvas.width * 0.017)}px Segoe UI`
     context.fillText(label.toUpperCase(), x + width * 0.08, rowY)
 
@@ -398,21 +413,21 @@ function drawStatCard(
   label: string,
   value: string
 ) {
-  context.fillStyle = 'rgba(10, 18, 30, 0.8)'
+  context.fillStyle = 'rgba(7, 17, 29, 0.82)'
   roundRect(context, x, y, width, height, height * 0.24)
   context.fill()
 
-  context.strokeStyle = 'rgba(138, 209, 194, 0.28)'
+  context.strokeStyle = 'rgba(76, 127, 186, 0.28)'
   context.lineWidth = 2
   roundRect(context, x, y, width, height, height * 0.24)
   context.stroke()
 
-  context.fillStyle = '#8ad1c2'
+  context.fillStyle = '#9cc8ff'
   context.font = `600 ${Math.round(width * 0.14)}px Segoe UI`
   context.textBaseline = 'top'
   context.fillText(label.toUpperCase(), x + width * 0.12, y + height * 0.16)
 
-  context.fillStyle = '#f4efe7'
+  context.fillStyle = label === 'Status' ? '#ffd5b6' : '#f7f3ea'
   context.font = `700 ${Math.round(width * 0.22)}px Georgia`
   context.fillText(value, x + width * 0.12, y + height * 0.48)
 }
@@ -427,7 +442,7 @@ function drawSideElevator(
   const x = canvas.width - railWidth - canvas.width * 0.04
   const y = canvas.height * 0.2
 
-  context.fillStyle = 'rgba(7, 20, 31, 0.72)'
+  context.fillStyle = 'rgba(7, 17, 29, 0.76)'
   roundRect(context, x, y, railWidth, railHeight, railWidth / 2)
   context.fill()
 
@@ -438,8 +453,8 @@ function drawSideElevator(
   const innerHeight = railHeight - innerPadding * 2
 
   const railGradient = context.createLinearGradient(0, innerY + innerHeight, 0, innerY)
-  railGradient.addColorStop(0, '#143846')
-  railGradient.addColorStop(1, '#244a57')
+  railGradient.addColorStop(0, '#123963')
+  railGradient.addColorStop(1, '#2a7add')
   context.fillStyle = railGradient
   roundRect(context, innerX, innerY, innerWidth, innerHeight, innerWidth / 2)
   context.fill()
@@ -448,8 +463,8 @@ function drawSideElevator(
   const clampedBodyHeight = clamp(bodyHeight, 0, 1)
   const markerY = innerY + (1 - clampedBodyHeight) * (innerHeight - markerHeight)
 
-  context.fillStyle = '#36b1ff'
-  context.strokeStyle = '#cfeeff'
+  context.fillStyle = '#4aa9ff'
+  context.strokeStyle = '#e9f6ff'
   context.lineWidth = 2
   roundRect(context, x - railWidth * 0.22, markerY, railWidth * 1.44, markerHeight, markerHeight / 2)
   context.fill()
@@ -462,7 +477,7 @@ function drawCountdownOverlay(
   canvas: HTMLCanvasElement,
   countdownValue: number
 ) {
-  context.fillStyle = 'rgba(0, 0, 0, 0.32)'
+  context.fillStyle = 'rgba(2, 5, 11, 0.4)'
   context.fillRect(0, 0, canvas.width, canvas.height)
 
   const width = canvas.width * 0.4
@@ -470,8 +485,8 @@ function drawCountdownOverlay(
   const x = (canvas.width - width) / 2
   const y = (canvas.height - height) / 2
 
-  context.fillStyle = 'rgba(0, 0, 0, 0.54)'
-  context.strokeStyle = 'rgba(255, 255, 255, 0.18)'
+  context.fillStyle = 'rgba(7, 17, 29, 0.76)'
+  context.strokeStyle = 'rgba(76, 127, 186, 0.2)'
   context.lineWidth = 2
   roundRect(context, x, y, width, height, height * 0.18)
   context.fill()
@@ -479,11 +494,11 @@ function drawCountdownOverlay(
   context.stroke()
 
   context.textAlign = 'center'
-  context.fillStyle = '#8ad1c2'
+  context.fillStyle = '#9cc8ff'
   context.font = `600 ${Math.round(canvas.width * 0.026)}px Segoe UI`
-  context.fillText('GET READY', x + width / 2, y + height * 0.28)
+  context.fillText(`${sponsorCoachName.toUpperCase()} / GET READY`, x + width / 2, y + height * 0.28)
 
-  context.fillStyle = '#f4efe7'
+  context.fillStyle = '#fff3e7'
   context.font = `700 ${Math.round(canvas.width * 0.11)}px Georgia`
   context.fillText(countdownValue.toString(), x + width / 2, y + height * 0.72)
   context.textAlign = 'left'
