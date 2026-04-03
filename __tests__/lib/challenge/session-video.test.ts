@@ -4,7 +4,7 @@ import {
 } from '@/lib/challenge/session-video'
 
 describe('challenge session video helpers', () => {
-  it('formats the burned-in hud labels from session state', () => {
+  it('formats the burned-in hud labels from the temporal counter state', () => {
     expect(
       buildChallengeFrameSnapshot({
         status: 'live',
@@ -14,10 +14,10 @@ describe('challenge session video helpers', () => {
         trackingScore: 83,
         bodyHeight: 0.42,
         counterPhase: 'down',
-        averageElbowAngle: 98.4,
-        postureConfidence: 0.76,
-        isPushupReady: true,
-        eligibleFrames: 9,
+        supportActive: true,
+        smoothedDepthSignal: 0.67,
+        topThreshold: 0.34,
+        bottomThreshold: 0.73,
       })
     ).toEqual({
       status: 'live',
@@ -27,10 +27,10 @@ describe('challenge session video helpers', () => {
       trackingLabel: '83%',
       bodyHeight: 0.42,
       counterPhaseLabel: 'DOWN',
-      elbowAngleLabel: '98°',
-      postureLabel: '76%',
-      readyLabel: 'YES',
-      eligibleFramesLabel: '9',
+      supportLabel: 'YES',
+      signalLabel: '67%',
+      topThresholdLabel: '34%',
+      bottomThresholdLabel: '73%',
     })
   })
 
@@ -43,11 +43,11 @@ describe('challenge session video helpers', () => {
         elapsedSeconds: 0,
         trackingScore: 0,
         bodyHeight: 2.5,
-        counterPhase: 'ready',
-        averageElbowAngle: null,
-        postureConfidence: null,
-        isPushupReady: false,
-        eligibleFrames: 0,
+        counterPhase: 'search',
+        supportActive: false,
+        smoothedDepthSignal: 0,
+        topThreshold: null,
+        bottomThreshold: null,
       }).bodyHeight
     ).toBe(1)
   })

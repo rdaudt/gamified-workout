@@ -15,10 +15,10 @@ export interface ChallengeFrameSnapshot {
   trackingLabel: string
   bodyHeight: number
   counterPhaseLabel: string
-  elbowAngleLabel: string
-  postureLabel: string
-  readyLabel: string
-  eligibleFramesLabel: string
+  supportLabel: string
+  signalLabel: string
+  topThresholdLabel: string
+  bottomThresholdLabel: string
 }
 
 export interface RecordingFormat {
@@ -35,11 +35,11 @@ interface BuildChallengeFrameSnapshotOptions {
   elapsedSeconds: number
   trackingScore: number
   bodyHeight: number
-  counterPhase: 'ready' | 'down' | 'up'
-  averageElbowAngle: number | null
-  postureConfidence: number | null
-  isPushupReady: boolean
-  eligibleFrames: number
+  counterPhase: 'search' | 'down' | 'up'
+  supportActive: boolean
+  smoothedDepthSignal: number
+  topThreshold: number | null
+  bottomThreshold: number | null
 }
 
 interface DrawPoseOverlayOptions {
@@ -73,16 +73,10 @@ export function buildChallengeFrameSnapshot(
     trackingLabel: `${options.trackingScore}%`,
     bodyHeight: clamp(options.bodyHeight, 0, 1),
     counterPhaseLabel: options.counterPhase.toUpperCase(),
-    elbowAngleLabel:
-      options.averageElbowAngle === null
-        ? 'n/a'
-        : `${Math.round(options.averageElbowAngle)}°`,
-    postureLabel:
-      options.postureConfidence === null
-        ? 'n/a'
-        : `${Math.round(options.postureConfidence * 100)}%`,
-    readyLabel: options.isPushupReady ? 'YES' : 'NO',
-    eligibleFramesLabel: options.eligibleFrames.toString(),
+    supportLabel: options.supportActive ? 'YES' : 'NO',
+    signalLabel: formatPercentLabel(options.smoothedDepthSignal),
+    topThresholdLabel: formatPercentLabel(options.topThreshold),
+    bottomThresholdLabel: formatPercentLabel(options.bottomThreshold),
   }
 }
 
@@ -338,10 +332,10 @@ function drawDebugPanel(
 
   const rows = [
     ['Phase', snapshot.counterPhaseLabel],
-    ['Angle', snapshot.elbowAngleLabel],
-    ['Posture', snapshot.postureLabel],
-    ['Ready', snapshot.readyLabel],
-    ['Eligible', snapshot.eligibleFramesLabel],
+    ['Support', snapshot.supportLabel],
+    ['Signal', snapshot.signalLabel],
+    ['Top', snapshot.topThresholdLabel],
+    ['Bottom', snapshot.bottomThresholdLabel],
   ] as const
 
   rows.forEach(([label, value], index) => {
@@ -518,4 +512,12 @@ function roundRect(
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+function formatPercentLabel(value: number | null) {
+  if (value === null || Number.isNaN(value)) {
+    return 'n/a'
+  }
+
+  return `${Math.round(clamp(value, 0, 1) * 100)}%`
 }

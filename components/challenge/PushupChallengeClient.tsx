@@ -56,7 +56,7 @@ const exercise = getExerciseById('push-ups')
 const wasmPath =
   'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm'
 const modelAssetPath =
-  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task'
+  'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task'
 const appAccentColor = '#8ad1c2'
 const coachAccentColor = '#f06d4f'
 
@@ -734,17 +734,23 @@ export function PushupChallengeClient() {
 
       const now = performance.now()
       let latestLandmarks: PosePoint[] | null = null
+      let latestWorldLandmarks: PosePoint[] | null = null
       let latestAnalysis: ReturnType<typeof analyzePushupLandmarks> | null = null
       if (video.readyState >= 2 && video.currentTime !== lastVideoTimeRef.current) {
         lastVideoTimeRef.current = video.currentTime
         const result = poseLandmarker.detectForVideo(video, now)
         const landmarks = result.landmarks[0]
+        const worldLandmarks = result.worldLandmarks[0]
 
         if (landmarks) {
           latestLandmarks = landmarks as PosePoint[]
+          latestWorldLandmarks = (worldLandmarks as PosePoint[] | undefined) ?? null
           drawPoseOverlay(context, canvas, latestLandmarks, poseConnectionsRef.current)
 
-          const analysis = analyzePushupLandmarks(latestLandmarks)
+          const analysis = analyzePushupLandmarks(
+            latestLandmarks,
+            latestWorldLandmarks ?? undefined
+          )
 
           if (analysis) {
             latestAnalysis = analysis
@@ -765,11 +771,7 @@ export function PushupChallengeClient() {
                 Math.round(calculateTrackingScore(counterStateRef.current))
               )
 
-              if (
-                challengeStartMsRef.current === null &&
-                update.nextState.eligibleFrames >= defaultPushupThresholds.minimumReadyFrames &&
-                nextAnalysis.averageElbowAngle <= defaultPushupThresholds.downAngle
-              ) {
+              if (challengeStartMsRef.current === null && update.startedMotion) {
                 challengeStartMsRef.current = performance.now()
                 sessionOccurredAtRef.current = new Date().toISOString()
               }
@@ -795,10 +797,10 @@ export function PushupChallengeClient() {
             trackingScore: Math.round(calculateTrackingScore(counterStateRef.current)),
             bodyHeight: latestAnalysis?.bodyHeight ?? bodyHeightRef.current,
             counterPhase: counterStateRef.current.phase,
-            averageElbowAngle: latestAnalysis?.averageElbowAngle ?? null,
-            postureConfidence: latestAnalysis?.postureConfidence ?? null,
-            isPushupReady: latestAnalysis?.isPushupReady ?? false,
-            eligibleFrames: counterStateRef.current.eligibleFrames,
+            supportActive: counterStateRef.current.supportActive,
+            smoothedDepthSignal: counterStateRef.current.smoothedDepthSignal,
+            topThreshold: counterStateRef.current.topThreshold,
+            bottomThreshold: counterStateRef.current.bottomThreshold,
           })
 
           drawComposedChallengeFrame({

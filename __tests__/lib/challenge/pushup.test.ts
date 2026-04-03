@@ -6,136 +6,271 @@ import {
   formatDuration,
   initialPushupCounterState,
   updatePushupCounter,
+  type PosePoint,
+  type PushupCounterState,
 } from '@/lib/challenge/pushup'
 
 function createBlankLandmarks() {
   return Array.from({ length: 33 }, () => ({
     x: 0.5,
     y: 0.5,
+    z: 0,
     visibility: 0.95,
   }))
 }
 
-function createPushupPose() {
-  const landmarks = createBlankLandmarks()
-
-  landmarks[0] = { x: 0.32, y: 0.28, visibility: 0.95 }
-  landmarks[11] = { x: 0.28, y: 0.32, visibility: 0.95 }
-  landmarks[12] = { x: 0.38, y: 0.32, visibility: 0.95 }
-  landmarks[13] = { x: 0.24, y: 0.45, visibility: 0.95 }
-  landmarks[14] = { x: 0.42, y: 0.45, visibility: 0.95 }
-  landmarks[15] = { x: 0.18, y: 0.7, visibility: 0.95 }
-  landmarks[16] = { x: 0.48, y: 0.7, visibility: 0.95 }
-  landmarks[23] = { x: 0.5, y: 0.35, visibility: 0.95 }
-  landmarks[24] = { x: 0.58, y: 0.35, visibility: 0.95 }
-  landmarks[25] = { x: 0.72, y: 0.37, visibility: 0.95 }
-  landmarks[26] = { x: 0.78, y: 0.37, visibility: 0.95 }
-  landmarks[27] = { x: 0.9, y: 0.39, visibility: 0.95 }
-  landmarks[28] = { x: 0.96, y: 0.39, visibility: 0.95 }
-
-  return landmarks
+function createWorldLandmarks(landmarks: PosePoint[]) {
+  return landmarks.map((point) => ({
+    x: point.x,
+    y: point.y,
+    z: point.z ?? 0,
+    visibility: point.visibility,
+  }))
 }
 
 function createStandingPose() {
   const landmarks = createBlankLandmarks()
 
-  landmarks[0] = { x: 0.5, y: 0.12, visibility: 0.95 }
-  landmarks[11] = { x: 0.42, y: 0.22, visibility: 0.95 }
-  landmarks[12] = { x: 0.58, y: 0.22, visibility: 0.95 }
-  landmarks[13] = { x: 0.4, y: 0.34, visibility: 0.95 }
-  landmarks[14] = { x: 0.6, y: 0.34, visibility: 0.95 }
-  landmarks[15] = { x: 0.38, y: 0.48, visibility: 0.95 }
-  landmarks[16] = { x: 0.62, y: 0.48, visibility: 0.95 }
-  landmarks[23] = { x: 0.45, y: 0.5, visibility: 0.95 }
-  landmarks[24] = { x: 0.55, y: 0.5, visibility: 0.95 }
-  landmarks[25] = { x: 0.46, y: 0.7, visibility: 0.95 }
-  landmarks[26] = { x: 0.54, y: 0.7, visibility: 0.95 }
-  landmarks[27] = { x: 0.47, y: 0.92, visibility: 0.95 }
-  landmarks[28] = { x: 0.53, y: 0.92, visibility: 0.95 }
+  landmarks[0] = { x: 0.5, y: 0.12, z: -0.02, visibility: 0.95 }
+  landmarks[11] = { x: 0.42, y: 0.22, z: 0, visibility: 0.95 }
+  landmarks[12] = { x: 0.58, y: 0.22, z: 0, visibility: 0.95 }
+  landmarks[13] = { x: 0.4, y: 0.34, z: 0.03, visibility: 0.95 }
+  landmarks[14] = { x: 0.6, y: 0.34, z: 0.03, visibility: 0.95 }
+  landmarks[15] = { x: 0.38, y: 0.48, z: 0.06, visibility: 0.95 }
+  landmarks[16] = { x: 0.62, y: 0.48, z: 0.06, visibility: 0.95 }
+  landmarks[23] = { x: 0.45, y: 0.5, z: 0.01, visibility: 0.95 }
+  landmarks[24] = { x: 0.55, y: 0.5, z: 0.01, visibility: 0.95 }
 
   return landmarks
 }
 
+function createFrontFacingPose(position: 'up' | 'down') {
+  const landmarks = createBlankLandmarks()
+  const isDown = position === 'down'
+
+  landmarks[0] = { x: 0.5, y: isDown ? 0.52 : 0.3, z: isDown ? -0.08 : -0.02, visibility: 0.95 }
+  landmarks[11] = { x: 0.34, y: isDown ? 0.44 : 0.33, z: isDown ? -0.05 : 0, visibility: 0.95 }
+  landmarks[12] = { x: 0.66, y: isDown ? 0.44 : 0.33, z: isDown ? -0.05 : 0, visibility: 0.95 }
+  landmarks[13] = { x: 0.23, y: isDown ? 0.52 : 0.49, z: isDown ? -0.02 : 0.05, visibility: 0.95 }
+  landmarks[14] = { x: 0.77, y: isDown ? 0.52 : 0.49, z: isDown ? -0.02 : 0.05, visibility: 0.95 }
+  landmarks[15] = { x: 0.15, y: 0.8, z: 0.1, visibility: 0.95 }
+  landmarks[16] = { x: 0.85, y: 0.8, z: 0.1, visibility: 0.95 }
+  landmarks[23] = { x: 0.45, y: isDown ? 0.5 : 0.44, z: isDown ? -0.03 : 0.01, visibility: 0.95 }
+  landmarks[24] = { x: 0.55, y: isDown ? 0.5 : 0.44, z: isDown ? -0.03 : 0.01, visibility: 0.95 }
+
+  return landmarks
+}
+
+function createSideFacingPose(position: 'up' | 'down') {
+  const landmarks = createBlankLandmarks()
+  const isDown = position === 'down'
+
+  landmarks[0] = { x: 0.33, y: isDown ? 0.49 : 0.24, z: isDown ? -0.08 : -0.01, visibility: 0.95 }
+  landmarks[11] = { x: 0.25, y: isDown ? 0.45 : 0.29, z: isDown ? -0.05 : 0, visibility: 0.95 }
+  landmarks[12] = { x: 0.37, y: isDown ? 0.45 : 0.29, z: isDown ? -0.05 : 0, visibility: 0.95 }
+  landmarks[13] = { x: 0.18, y: isDown ? 0.52 : 0.43, z: isDown ? -0.02 : 0.04, visibility: 0.95 }
+  landmarks[14] = { x: 0.44, y: isDown ? 0.52 : 0.43, z: isDown ? -0.02 : 0.04, visibility: 0.95 }
+  landmarks[15] = { x: 0.14, y: 0.74, z: 0.08, visibility: 0.95 }
+  landmarks[16] = { x: 0.5, y: 0.74, z: 0.08, visibility: 0.95 }
+  landmarks[23] = { x: 0.5, y: isDown ? 0.48 : 0.33, z: isDown ? -0.03 : 0.02, visibility: 0.95 }
+  landmarks[24] = { x: 0.6, y: isDown ? 0.48 : 0.33, z: isDown ? -0.03 : 0.02, visibility: 0.95 }
+
+  return landmarks
+}
+
+function createKneelingSetupPose() {
+  const landmarks = createBlankLandmarks()
+
+  landmarks[0] = { x: 0.5, y: 0.28, z: -0.02, visibility: 0.95 }
+  landmarks[11] = { x: 0.38, y: 0.34, z: 0, visibility: 0.95 }
+  landmarks[12] = { x: 0.62, y: 0.34, z: 0, visibility: 0.95 }
+  landmarks[13] = { x: 0.33, y: 0.47, z: 0.02, visibility: 0.95 }
+  landmarks[14] = { x: 0.67, y: 0.47, z: 0.02, visibility: 0.95 }
+  landmarks[15] = { x: 0.28, y: 0.76, z: 0.08, visibility: 0.95 }
+  landmarks[16] = { x: 0.72, y: 0.76, z: 0.08, visibility: 0.95 }
+  landmarks[23] = { x: 0.44, y: 0.58, z: 0.04, visibility: 0.95 }
+  landmarks[24] = { x: 0.56, y: 0.58, z: 0.04, visibility: 0.95 }
+
+  return landmarks
+}
+
+function analyzeFrame(landmarks: PosePoint[]) {
+  return analyzePushupLandmarks(landmarks, createWorldLandmarks(landmarks))
+}
+
+function advanceCounter(state: PushupCounterState, analyses: ReturnType<typeof analyzeFrame>[]) {
+  let nextState = state
+  const updates = []
+
+  for (const analysis of analyses) {
+    if (!analysis) {
+      throw new Error('Synthetic analysis unexpectedly returned null.')
+    }
+
+    const update = updatePushupCounter(nextState, analysis)
+    nextState = update.nextState
+    updates.push(update)
+  }
+
+  return {
+    nextState,
+    updates,
+  }
+}
+
+function repeatAnalysis(analysis: ReturnType<typeof analyzeFrame>, count: number) {
+  return Array.from({ length: count }, () => analysis)
+}
+
+function requireAnalysis(analysis: ReturnType<typeof analyzeFrame>) {
+  if (!analysis) {
+    throw new Error('Synthetic analysis unexpectedly returned null.')
+  }
+
+  return analysis
+}
+
 describe('pushup challenge helpers', () => {
-  it('recognizes a stable pushup posture and rejects upright walking posture', () => {
-    const pushupAnalysis = analyzePushupLandmarks(createPushupPose())
-    const standingAnalysis = analyzePushupLandmarks(createStandingPose())
+  it('detects support from front and side pushup setups while rejecting standing posture', () => {
+    const frontUp = analyzeFrame(createFrontFacingPose('up'))
+    const sideUp = analyzeFrame(createSideFacingPose('up'))
+    const standing = analyzeFrame(createStandingPose())
 
-    expect(pushupAnalysis).toEqual(
+    expect(frontUp).toEqual(
       expect.objectContaining({
         isConfident: true,
-        isPushupReady: true,
+        hasSupport: true,
       })
     )
-    expect(pushupAnalysis?.postureConfidence).toBeGreaterThan(
-      defaultPushupThresholds.minimumPostureConfidence
-    )
-    expect(standingAnalysis).toEqual(
+    expect(sideUp).toEqual(
       expect.objectContaining({
         isConfident: true,
-        isPushupReady: false,
+        hasSupport: true,
       })
     )
-    expect(standingAnalysis?.postureConfidence).toBeLessThan(
-      defaultPushupThresholds.minimumPostureConfidence
+    expect(standing).toEqual(
+      expect.objectContaining({
+        isConfident: true,
+        hasSupport: false,
+      })
     )
   })
 
-  it('requires a stable ready posture before a rep can increment', () => {
-    const down = {
-      averageElbowAngle: 92,
-      bodyHeight: 0.05,
-      trackingConfidence: 0.95,
-      postureConfidence: 0.9,
-      isConfident: true,
-      isPushupReady: true,
-    }
-    const up = {
-      averageElbowAngle: 170,
-      bodyHeight: 1,
-      trackingConfidence: 0.95,
-      postureConfidence: 0.9,
-      isConfident: true,
-      isPushupReady: true,
-    }
+  it('counts a front-facing pushup cycle and starts timing on the first valid descent', () => {
+    const frontUp = analyzeFrame(createFrontFacingPose('up'))
+    const frontDown = analyzeFrame(createFrontFacingPose('down'))
 
-    let state = initialPushupCounterState
+    const { updates } = advanceCounter(initialPushupCounterState, [
+      ...repeatAnalysis(frontUp, 8),
+      ...repeatAnalysis(frontDown, 5),
+      ...repeatAnalysis(frontUp, 6),
+    ])
 
-    for (let index = 0; index < defaultPushupThresholds.minimumReadyFrames - 1; index += 1) {
-      const update = updatePushupCounter(state, up)
-      state = update.nextState
-      expect(update.incremented).toBe(false)
-    }
+    const startedMotion = updates.some((update) => update.startedMotion)
+    const finalState = updates.at(-1)?.nextState
 
-    const afterDown = updatePushupCounter(state, down)
-    const afterUp = updatePushupCounter(afterDown.nextState, up)
-
-    expect(afterDown.incremented).toBe(false)
-    expect(afterDown.nextState.phase).toBe('down')
-    expect(afterUp.incremented).toBe(true)
-    expect(afterUp.nextState.reps).toBe(1)
+    expect(startedMotion).toBe(true)
+    expect(finalState?.reps).toBe(1)
+    expect(finalState?.phase).toBe('up')
+    expect(finalState?.thresholdsLocked).toBe(true)
   })
 
-  it('drops back to ready when posture becomes invalid', () => {
-    const readyState = {
-      ...initialPushupCounterState,
-      phase: 'down' as const,
-      eligibleFrames: defaultPushupThresholds.minimumReadyFrames,
-    }
-    const invalidFrame = {
-      averageElbowAngle: 120,
-      bodyHeight: 0.4,
-      trackingConfidence: 0.95,
-      postureConfidence: 0.25,
-      isConfident: true,
-      isPushupReady: false,
+  it('counts a side-view pushup cycle with the same temporal counter', () => {
+    const sideUp = analyzeFrame(createSideFacingPose('up'))
+    const sideDown = analyzeFrame(createSideFacingPose('down'))
+
+    const { nextState } = advanceCounter(initialPushupCounterState, [
+      ...repeatAnalysis(sideUp, 8),
+      ...repeatAnalysis(sideDown, 5),
+      ...repeatAnalysis(sideUp, 6),
+    ])
+
+    expect(nextState.reps).toBe(1)
+    expect(nextState.bottomThreshold).not.toBeNull()
+    expect(nextState.topThreshold).not.toBeNull()
+  })
+
+  it('does not count walking into frame or holding a kneeling setup without a full cycle', () => {
+    const standing = analyzeFrame(createStandingPose())
+    const kneeling = analyzeFrame(createKneelingSetupPose())
+
+    const standingResult = advanceCounter(initialPushupCounterState, repeatAnalysis(standing, 18))
+    const kneelingResult = advanceCounter(initialPushupCounterState, repeatAnalysis(kneeling, 18))
+
+    expect(standingResult.nextState.reps).toBe(0)
+    expect(standingResult.nextState.supportActive).toBe(false)
+    expect(kneelingResult.nextState.reps).toBe(0)
+  })
+
+  it('survives brief support loss without instantly losing a valid cycle', () => {
+    const frontUp = analyzeFrame(createFrontFacingPose('up'))
+    const frontDown = analyzeFrame(createFrontFacingPose('down'))
+    const standing = analyzeFrame(createStandingPose())
+
+    const { nextState } = advanceCounter(initialPushupCounterState, [
+      ...repeatAnalysis(frontUp, 8),
+      ...repeatAnalysis(frontDown, 4),
+      ...repeatAnalysis(standing, 2),
+      ...repeatAnalysis(frontUp, 5),
+    ])
+
+    expect(nextState.reps).toBe(1)
+    expect(nextState.lostSupportFrames).toBe(0)
+  })
+
+  it('counts a rep when support flickers at the top lockout but the motion stays coherent', () => {
+    const frontUp = requireAnalysis(analyzeFrame(createFrontFacingPose('up')))
+    const frontDown = requireAnalysis(analyzeFrame(createFrontFacingPose('down')))
+    const topLockoutFlicker = {
+      ...frontUp,
+      hasSupport: false,
+      supportConfidence: defaultPushupThresholds.minimumSupportConfidence * 0.8,
+      depthSignal: 0.18,
     }
 
-    const update = updatePushupCounter(readyState, invalidFrame)
+    const { nextState } = advanceCounter(initialPushupCounterState, [
+      ...repeatAnalysis(frontUp, 8),
+      ...repeatAnalysis(frontDown, 5),
+      ...repeatAnalysis(topLockoutFlicker, 4),
+    ])
 
-    expect(update.incremented).toBe(false)
-    expect(update.nextState.phase).toBe('ready')
-    expect(update.nextState.eligibleFrames).toBe(0)
+    expect(nextState.reps).toBe(1)
+    expect(nextState.phase).toBe('up')
+  })
+
+  it('does not count a rep if support is lost mid-cycle and the user exits the pushup', () => {
+    const frontUp = analyzeFrame(createFrontFacingPose('up'))
+    const frontDown = analyzeFrame(createFrontFacingPose('down'))
+    const standing = analyzeFrame(createStandingPose())
+
+    const { nextState } = advanceCounter(initialPushupCounterState, [
+      ...repeatAnalysis(frontUp, 8),
+      ...repeatAnalysis(frontDown, 5),
+      ...repeatAnalysis(standing, 10),
+    ])
+
+    expect(nextState.reps).toBe(0)
+    expect(nextState.phase).toBe('search')
+    expect(nextState.topThreshold).toBeNull()
+    expect(nextState.bottomThreshold).toBeNull()
+  })
+
+  it('does not add reps after the user stands up and picks up the phone', () => {
+    const frontUp = analyzeFrame(createFrontFacingPose('up'))
+    const frontDown = analyzeFrame(createFrontFacingPose('down'))
+    const standing = analyzeFrame(createStandingPose())
+
+    const { nextState } = advanceCounter(initialPushupCounterState, [
+      ...repeatAnalysis(frontUp, 8),
+      ...repeatAnalysis(frontDown, 5),
+      ...repeatAnalysis(frontUp, 6),
+      ...repeatAnalysis(standing, 10),
+    ])
+
+    expect(nextState.reps).toBe(1)
+    expect(nextState.phase).toBe('search')
+    expect(nextState.topThreshold).toBeNull()
+    expect(nextState.bottomThreshold).toBeNull()
   })
 
   it('reports tracking and effort metrics in bounded form', () => {

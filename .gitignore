@@ -4,6 +4,8 @@ node_modules
 coverage
 .claude/
 .superpowers/
+tmp/
+*.mp4
 excalidraw.log
 frame1.jpg
 frame2.jpg
