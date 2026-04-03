@@ -10,6 +10,7 @@ export interface PushupFrameAnalysis {
   bodyHeight: number
   trackingConfidence: number
   supportConfidence: number
+  torsoDrop: number
   depthSignal: number
   isConfident: boolean
   hasSupport: boolean
@@ -280,7 +281,7 @@ export function analyzePushupLandmarks(
     handPlacementDelta >= 0.05 &&
     shoulderWidth >= 0.09 &&
     centeredOffset <= 0.3 &&
-    torsoDrop <= 0.22
+    torsoDrop <= 0.26
 
   const headCompression = 1 - normalizeScore(wristMid.y - nose.y, 0.2, 0.62)
   const chestCompression = 1 - normalizeScore(wristMid.y - shoulderMid.y, 0.08, 0.42)
@@ -299,6 +300,7 @@ export function analyzePushupLandmarks(
     bodyHeight,
     trackingConfidence,
     supportConfidence,
+    torsoDrop,
     depthSignal,
     isConfident,
     hasSupport,
@@ -317,7 +319,18 @@ export function updatePushupCounter(
     latestBodyHeight: analysis.bodyHeight,
   }
 
-  if (!analysis.isConfident || !analysis.hasSupport) {
+  const canFinishActiveRep =
+    analysis.isConfident &&
+    state.phase === 'down' &&
+    state.topThreshold !== null &&
+    state.bottomThreshold !== null &&
+    state.supportFrames >= thresholds.minimumSupportFrames &&
+    analysis.supportConfidence >= thresholds.minimumSupportConfidence * 0.72 &&
+    analysis.torsoDrop <= 0.27 &&
+    analysis.depthSignal >= state.topThreshold - 0.18 &&
+    analysis.depthSignal <= state.bottomThreshold + 0.12
+
+  if (!analysis.isConfident || (!analysis.hasSupport && !canFinishActiveRep)) {
     nextState.supportActive = false
     nextState.lostSupportFrames = state.lostSupportFrames + 1
 

@@ -2,6 +2,7 @@ import {
   analyzePushupLandmarks,
   calculateEffortScore,
   calculateTrackingScore,
+  defaultPushupThresholds,
   formatDuration,
   initialPushupCounterState,
   updatePushupCounter,
@@ -121,6 +122,14 @@ function repeatAnalysis(analysis: ReturnType<typeof analyzeFrame>, count: number
   return Array.from({ length: count }, () => analysis)
 }
 
+function requireAnalysis(analysis: ReturnType<typeof analyzeFrame>) {
+  if (!analysis) {
+    throw new Error('Synthetic analysis unexpectedly returned null.')
+  }
+
+  return analysis
+}
+
 describe('pushup challenge helpers', () => {
   it('detects support from front and side pushup setups while rejecting standing posture', () => {
     const frontUp = analyzeFrame(createFrontFacingPose('up'))
@@ -207,6 +216,43 @@ describe('pushup challenge helpers', () => {
 
     expect(nextState.reps).toBe(1)
     expect(nextState.lostSupportFrames).toBe(0)
+  })
+
+  it('counts a rep when support flickers at the top lockout but the motion stays coherent', () => {
+    const frontUp = requireAnalysis(analyzeFrame(createFrontFacingPose('up')))
+    const frontDown = requireAnalysis(analyzeFrame(createFrontFacingPose('down')))
+    const topLockoutFlicker = {
+      ...frontUp,
+      hasSupport: false,
+      supportConfidence: defaultPushupThresholds.minimumSupportConfidence * 0.8,
+      depthSignal: 0.18,
+    }
+
+    const { nextState } = advanceCounter(initialPushupCounterState, [
+      ...repeatAnalysis(frontUp, 8),
+      ...repeatAnalysis(frontDown, 5),
+      ...repeatAnalysis(topLockoutFlicker, 4),
+    ])
+
+    expect(nextState.reps).toBe(1)
+    expect(nextState.phase).toBe('up')
+  })
+
+  it('does not count a rep if support is lost mid-cycle and the user exits the pushup', () => {
+    const frontUp = analyzeFrame(createFrontFacingPose('up'))
+    const frontDown = analyzeFrame(createFrontFacingPose('down'))
+    const standing = analyzeFrame(createStandingPose())
+
+    const { nextState } = advanceCounter(initialPushupCounterState, [
+      ...repeatAnalysis(frontUp, 8),
+      ...repeatAnalysis(frontDown, 5),
+      ...repeatAnalysis(standing, 10),
+    ])
+
+    expect(nextState.reps).toBe(0)
+    expect(nextState.phase).toBe('search')
+    expect(nextState.topThreshold).toBeNull()
+    expect(nextState.bottomThreshold).toBeNull()
   })
 
   it('does not add reps after the user stands up and picks up the phone', () => {
